@@ -4,11 +4,11 @@ project(summarize)
 set(CMAKE_CXX_STANDARD 20)
 
 option(RUN_TESTS "Run unit tests?" ON)
-# if(RUN_TESTS)
+if(RUN_TESTS)
     message("Running tests...")
     enable_testing()
     add_subdirectory(test)
-# endif()
+endif()
 
 add_executable(summarize src/main.cpp src/params.cpp)
 
