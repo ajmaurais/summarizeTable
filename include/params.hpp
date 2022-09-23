@@ -10,19 +10,29 @@
 #include <algorithm>
 
 namespace params {
+
+    size_t const MAX_LINE_LEN = 80;
+    size_t const INDENT_LEN = 22;
+
+    static std::string multiLineString(std::string addStr, size_t margin,
+                                       size_t maxLineLen, size_t indentLen,
+                                       bool indentFirstLine);
+    bool newWord(char c);
+
     class Option {
     public:
         enum TYPE {
             STRING, BOOL, INT, FLOAT
         };
+
         enum ACTION {
-            // TODO: Add help and version actions.
             STORE_TRUE, STORE_FALSE, HELP, VERSION, NONE
         };
 
         static size_t maxLineLen;
         static size_t indendentLen;
-    private:
+
+    protected:
         std::string _shortOpt;
         std::string _longOpt;
         std::string _name;
@@ -39,7 +49,6 @@ namespace params {
         bool _isSet;
 
         void _checkOptFlags() const;
-        static bool newWord(char);
     public:
         Option(std::string shortOpt, std::string longOpt, std::string help,
                TYPE valueType, std::string defaultVal = "", ACTION action = NONE);
@@ -68,7 +77,7 @@ namespace params {
         std::string signature(int indent = 0) const;
         std::string help() const;
         static std::string parseOption(std::string arg);
-        static std::string multiLineString(std::string addStr, size_t indent, bool indentFirstLine = false);
+        static std::string multiLineString(std::string addStr, size_t margin, bool indentFirstLine = false);
     };
 
     class Params {

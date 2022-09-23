@@ -1,8 +1,8 @@
 
 #include <params.hpp>
 
-size_t params::Option::maxLineLen = 80;
-size_t params::Option::indendentLen = 22;
+size_t params::Option::maxLineLen = params::MAX_LINE_LEN;
+size_t params::Option::indendentLen = params::INDENT_LEN;
 
 void params::Option::_checkOptFlags() const {
     if(_shortOpt.empty() && _longOpt.empty())
@@ -141,7 +141,7 @@ std::string params::Option::help() const {
     return ret;
 }
 
-std::string params::Option::signature(int indent) const
+std::string params::Option::signature(int margin) const
 {
     std::string ret = "";
     std::string name = (_action == ACTION::NONE ? _name : "");
@@ -153,26 +153,32 @@ std::string params::Option::signature(int indent) const
     if(!_longOpt.empty())
         ret += "--" + _longOpt + (name.empty() ? "" : ' ' + name);
 
-    size_t spacesBeforeHelp = Option::indendentLen > ret.size() ? Option::indendentLen + indent - ret.size() : 0;
+    size_t spacesBeforeHelp = indendentLen > ret.size() ? indendentLen + margin - ret.size() : 0;
     if(spacesBeforeHelp <= 0) {
         ret += "\n";
-        ret = std::string(indent, ' ') + ret + multiLineString(help(), indent, true);
+        ret = std::string(margin, ' ') + ret + multiLineString(help(), margin, true);
     } else {
-        ret += std::string(spacesBeforeHelp - indent, ' ');
+        ret += std::string(spacesBeforeHelp - margin, ' ');
         ret += help();
-        ret = multiLineString(ret, indent);
+        ret = multiLineString(ret, margin);
     }
 
     return ret;
 }
 
-bool params::Option::newWord(char c) {
+std::string params::Option::multiLineString(std::string addStr, size_t margin, bool indentFirstLine) {
+    return params::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
+}
+
+bool params::newWord(char c) {
     return c == ' ';
 }
 
-std::string params::Option::multiLineString(std::string addStr, size_t indent, bool indentFirstLine)
+std::string params::multiLineString(std::string addStr, size_t margin,
+                                    size_t maxLineLen, size_t indentLen,
+                                    bool indentFirstLine)
 {
-    if(Option::maxLineLen - indent < 20)
+    if(maxLineLen - margin < 20)
         throw std::runtime_error("Can't have text on line less than 20 characters!");
 
     // Fix white spaces in addStr
@@ -187,8 +193,8 @@ std::string params::Option::multiLineString(std::string addStr, size_t indent, b
     for(size_t i = 0; i < addStrLen;)
     {
         if(i > 0 && !word.empty()) i++;
-        if(indentFirstLine) lines.emplace_back(indent + Option::indendentLen, ' ');
-        else lines.emplace_back((lines.empty() ? indent : indent + Option::indendentLen), ' ');
+        if(indentFirstLine) lines.emplace_back(margin + indentLen, ' ');
+        else lines.emplace_back((lines.empty() ? margin : margin + indentLen), ' ');
 
         lines.back() += word;
         beginingOfLine = word.empty();
@@ -198,7 +204,7 @@ std::string params::Option::multiLineString(std::string addStr, size_t indent, b
             while(i < addStrLen && !newWord(addStr[i]))  {
                 word += addStr[i++];
             }
-            if(lines.back().size() + word.size() + 1 <= Option::maxLineLen) {
+            if(lines.back().size() + word.size() + 1 <= maxLineLen) {
                 i++;
                 if(beginingOfLine) beginingOfLine = false;
                 else lines.back() += ' ';
@@ -211,7 +217,7 @@ std::string params::Option::multiLineString(std::string addStr, size_t indent, b
         }
     }
     if(!word.empty()) {
-        lines.emplace_back(std::string(indent + Option::indendentLen, ' ') + word);
+        lines.emplace_back(std::string(margin + indentLen, ' ') + word);
     }
 
 
@@ -249,8 +255,8 @@ bool params::Params::isOption(std::string arg) const {
 }
 
 void params::Params::printHelp() const {
-    size_t indent = 2;
-    std::cout << "Usage: " << signature() << "\n\n" << Option::multiLineString(_description, indent);
+    size_t margin = 2;
+    std::cout << "Usage: " << signature() << "\n\n" << params::Option::multiLineString(_description, margin);
 
     //options
 
