@@ -1,27 +1,43 @@
 
 #include <params.hpp>
 
-// const std::regex params::Option::BOOL_PATTERN = std::regex("^(true|false|0|1)$", std::regex_constants::icase);
-// const std::regex params::Option::INT_PATTERN = std::regex("^[-+]?[0-9]+$");
-// const std::regex params::Option::FLOAT_PATTERN = std::regex("^[-+][0-9]+(\\.[0-9]*)?$");
+size_t params::Option::maxLineLen = 80;
+size_t params::Option::indendentLen = 22;
+
+void params::Option::_checkOptFlags() const {
+    if(_shortOpt.empty() && _longOpt.empty())
+        throw std::invalid_argument("Long or short option must be specified!");
+    if((!_shortOpt.empty() && _shortOpt[0] == '-') || (!_longOpt.empty() && _longOpt[0] == '-'))
+        throw std::invalid_argument("Option flags can not begin with '-'!");
+}
 
 params::Option::Option(std::string shortOpt, std::string longOpt, std::string help,
-               Option::VALUE_TYPE valueType, std::string defaultVal,
-               Option::ACTION action) {
+                       Option::TYPE valueType, std::string defaultVal,
+                       Option::ACTION action) {
     _shortOpt = shortOpt;
     _longOpt = longOpt;
+    _checkOptFlags();
+    _name = _longOpt.empty() ? _shortOpt : _longOpt;
     _help = help;
     _isPositional = false;
     _isSet = false;
     _valueType = valueType;
+
+    _action = action;
+    if(_action != ACTION::NONE && !defaultVal.empty()) {
+        if(_action == ACTION::STORE_TRUE) _value = "false";
+        if(_action == ACTION::STORE_FALSE) _value = "true";
+    }
+    if(!isValid()) throw std::invalid_argument("Invalid option!");
+
     // validate default arg if necessary
     if (!defaultVal.empty() && !isValid(defaultVal))
-        throw std::runtime_error(defaultVal + " is an invalid value for VALUE_TYPE!");
+        throw std::invalid_argument(defaultVal + " is an invalid value for TYPE!");
     _value = defaultVal;
-    _action = action;
+    _defaultValue = defaultVal;
 }
 
-params::Option::Option(std::string name, std::string help, Option::VALUE_TYPE valueType) {
+params::Option::Option(std::string name, std::string help, Option::TYPE valueType) {
     _isPositional = true;
     _isSet = false;
     _name = name;
@@ -29,31 +45,67 @@ params::Option::Option(std::string name, std::string help, Option::VALUE_TYPE va
     _valueType = valueType;
     _action = ACTION::NONE;
 }
+
+params::Option::Option(const params::Option& rhs) {
+    _shortOpt = rhs._shortOpt;
+    _longOpt = rhs._longOpt;
+    _name = rhs._name;
+    _help = rhs._help;
+    _value = rhs._value;
+    _defaultValue = rhs._defaultValue;
+    _valueType = rhs._valueType;
+    _action = rhs._action;
+    _isPositional = rhs._isPositional;
+    _isSet = rhs._isSet;
+}
+
+params::Option::Option() {
+    _valueType = TYPE::STRING;
+    _action = ACTION::NONE;
+    _isPositional = true;
+    _isSet = false;
+}
+
+params::Option &params::Option::operator=(const params::Option &rhs) {
+    _shortOpt = rhs._shortOpt;
+    _longOpt = rhs._longOpt;
+    _name = rhs._name;
+    _help = rhs._help;
+    _value = rhs._value;
+    _defaultValue = rhs._defaultValue;
+    _valueType = rhs._valueType;
+    _action = rhs._action;
+    _isPositional = rhs._isPositional;
+    _isSet = rhs._isSet;
+    return *this;
+}
+
 //! Check if \p value can be converted into \p params::Option::valueType.
 bool params::Option::isValid(std::string value) const {
-    if(_valueType == VALUE_TYPE::BOOL) {
+    if(_valueType == TYPE::BOOL) {
         return std::regex_match(value, std::regex("^(true|false|0|1)$", std::regex_constants::icase));
     }
-    if(_action != NONE)
+    if(_action != ACTION::NONE)
         return false; // Has to be NONE unless _valueType is BOOL.
-    if(_valueType == VALUE_TYPE::STRING) return true; // it's already a string so it's valid.
-    if(_valueType == VALUE_TYPE::INT) {
-        return std::regex_match(value, std::regex("^[-+]?[0-9]+$"));
+    if(_valueType == TYPE::STRING) return true; // it's already a string so it's valid.
+    if(_valueType == TYPE::INT) {
+        return std::regex_match(value, std::regex("^-?[0-9]+$"));
     }
-    if(_valueType == VALUE_TYPE::FLOAT) {
-        return std::regex_match(value, std::regex("^[-+][0-9]+(\\.[0-9]*)?$"));
+    if(_valueType == TYPE::FLOAT) {
+        return std::regex_match(value, std::regex("^-?[0-9]+(\\.[0-9]*)?$"));
     }
     return false;
 }
 
 bool params::Option::isValid() const {
     if(_isPositional && !_isSet) return false;
+    if(_valueType != TYPE::BOOL && _action != ACTION::NONE) return false;
     if(!_isPositional && _value.empty()) return true;
     return isValid(_value);
 }
 
 bool params::Option::setValue(std::string value) {
-    if(_valueType == VALUE_TYPE::BOOL && _action != ACTION::NONE){
+    if(_valueType == TYPE::BOOL && _action != ACTION::NONE){
         if(!value.empty()) return false;
         if(_action == ACTION::STORE_TRUE) _value = "true";
         if(_action == ACTION::STORE_FALSE) _value = "false";
@@ -67,5 +119,192 @@ bool params::Option::setValue(std::string value) {
     bool valid = isValid();
     if(valid) _isSet = true;
     return valid;
+}
+
+std::string params::Option::parseOption(std::string arg) {
+    std::string ret = arg;
+    size_t len = std::min(size_t(2), arg.size());
+    for(size_t i = 0; i < len; i++) {
+        if(arg[i] == '-') ret.erase(0, 1);
+    }
+    return ret;
+}
+
+std::string params::Option::help() const {
+    std::string ret = _help;
+    // if(_valueType == TYPE::BOOL && _action != ACTION::NONE)
+    if(!_defaultValue.empty() && _action == ACTION::NONE) {
+        ret += " '" + _defaultValue + "' is the default.";
+    }
+    return ret;
+}
+
+std::string params::Option::signature(int indent) const
+{
+    std::string ret = "";
+    std::string name = (_action == ACTION::NONE ? _name : "");
+    std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+    if(!_shortOpt.empty()) {
+        ret += "-" + _shortOpt + (name.empty() ? "" : ' ' + name);
+        if(!_longOpt.empty()) ret += ", ";
+    }
+    if(!_longOpt.empty())
+        ret += "--" + _longOpt + (name.empty() ? "" : ' ' + name);
+
+    size_t spacesBeforeHelp = Option::indendentLen > ret.size() ? Option::indendentLen + indent - ret.size() : 0;
+    if(spacesBeforeHelp <= 0) {
+        ret += "\n";
+        ret = std::string(indent, ' ') + ret + multiLineString(help(), indent, true);
+    } else {
+        ret += std::string(spacesBeforeHelp - indent, ' ');
+        ret += help();
+        ret = multiLineString(ret, indent);
+    }
+
+    return ret;
+}
+
+bool params::Option::newWord(char c) {
+    return c == ' ';
+}
+
+std::string params::Option::multiLineString(std::string addStr, size_t indent, bool indentFirstLine)
+{
+    if(Option::maxLineLen - indent < 20)
+        throw std::runtime_error("Can't have text on line less than 20 characters!");
+
+    // Fix white spaces in addStr
+    std::replace(addStr.begin(), addStr.end(), '\t', ' ');
+    std::replace(addStr.begin(), addStr.end(), '\n', ' ');
+
+    std::vector<std::string> lines;
+    size_t lineLen = 0;
+    size_t addStrLen = addStr.size();
+    std::string word;
+    bool beginingOfLine = true;
+    for(size_t i = 0; i < addStrLen;)
+    {
+        if(i > 0 && !word.empty()) i++;
+        if(indentFirstLine) lines.emplace_back(indent + Option::indendentLen, ' ');
+        else lines.emplace_back((lines.empty() ? indent : indent + Option::indendentLen), ' ');
+
+        lines.back() += word;
+        beginingOfLine = word.empty();
+        lineLen = lines.back().size();
+        while(i < addStrLen && lineLen < maxLineLen) {
+            word = "";
+            while(i < addStrLen && !newWord(addStr[i]))  {
+                word += addStr[i++];
+            }
+            if(lines.back().size() + word.size() + 1 <= Option::maxLineLen) {
+                i++;
+                if(beginingOfLine) beginingOfLine = false;
+                else lines.back() += ' ';
+                lines.back() += word;
+                word = "";
+            } else {
+                break;
+            }
+            lineLen = lines.back().size();
+        }
+    }
+    if(!word.empty()) {
+        lines.emplace_back(std::string(indent + Option::indendentLen, ' ') + word);
+    }
+
+
+    std::string ret;
+    for(size_t i = 0; i < lines.size(); i++) {
+        if(i > 0) ret += '\n';
+        ret += lines[i];
+    }
+    return ret;
+}
+
+void params::Params::addOption(std::string shortOpt, std::string longOpt, std::string help,
+                               params::Option::TYPE valueType, std::string defaultVal,
+                               params::Option::ACTION action) {
+    params::Option option(shortOpt, longOpt, help, valueType, defaultVal, action);
+    if(_options.find(option.getName()) != _options.end())
+        throw std::runtime_error("'" + option.getName() + "' already exists as an option!");
+    _options[option.getName()] = option;
+}
+
+void params::Params::addArgument(std::string name, std::string help, params::Option::TYPE valueType) {
+    _args.emplace_back(name, help, valueType);
+}
+
+bool params::Params::isOption(std::string arg) const {
+    if(!isFlag(arg)) return false;
+    std::string key = Option::parseOption(arg);
+    return _options.find(key) != _options.end();
+}
+
+void params::Params::printHelp() const {
+    std::cout << "Usage: " << signature() << "\n\n" << _description << "\n\nPositional arguments:";
+    for(const auto& arg: _args)
+        arg.signature();
+
+}
+
+std::string params::Params::signature() const {
+    std::string ret = _programName;
+    if(!_options.empty()) ret += " [options]";
+    if(!_args.empty()) {
+        for(const auto& arg: _args) {
+            ret += " <" + arg.getName() + ">";
+            // TODO: Add if statement here to deal with multiple arguments
+        }
+    }
+    return ret;
+}
+
+void params::Params::usage(std::ostream& out) const {
+    out << signature();
+}
+
+bool params::Params::parseArgs(int argc, char **argv)
+{
+    if(_programName.empty())
+        _programName = std::filesystem::path(std::string(argv[0])).filename();
+    for(int i = 1; i < argc; i++)
+    {
+        if(isFlag(std::string(argv[i])))
+        {
+            std::string option = std::string(argv[i]);
+            if(isOption(option))
+            {
+                std::string value;
+                if(_options[option].getType() == Option::TYPE::BOOL &&
+                   _options[option].getAction() != Option::ACTION::NONE) {
+                    value = "";
+                }
+                else {
+                    if(!isFlag(std::string(argv[++i]))) {
+                        value = std::string(argv[i]);
+                    } else {
+                        std::cerr << "ERROR: Argument required for " << option << "'\n";
+                        return false;
+                    }
+                }
+                if(!_options[option].setValue(value)) {
+                    std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
+                    return false;
+                }
+            } else {
+                std::cerr << "ERROR: '" << option << "' is an unknown option\n";
+            }
+        }
+        else { // we are in positional arguments
+            for(int arg_i = 0; i < argc; arg_i++) {
+                if(isFlag(argv[i])) {
+                    usage();
+                    return false;
+                }
+                _args[arg_i].setValue(std::string(argv[i++]));
+            }
+        }
+    }
+    return true;
 }
 

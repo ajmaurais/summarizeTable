@@ -52,20 +52,19 @@ namespace Test {
     std::string Test::section_name;        \
     int Test::exceptionLevel;        \
     int Test::testLine; \
-    int main(int argx, char** argv) \
+    int main(int argc, char** argv) \
     {                          \
        std::cout << "Running test of " << Test::test_name << std::endl;                 \
        try {
 
 #define END_TEST \
     }             \
-    catch ( std::exception& e) \
-    { \
-      Test::this_test = false; \
-      Test::test = false;      \
-      Test::all_tests = false; \
-      std::cout << "ERROR: Caught unexpected std::exception" << std::endl; \
-      std::cout << "\tMessage: " << e.what() << std::endl; \
+    catch ( std::exception& e) { \
+        Test::this_test = false; \
+        Test::test = false;      \
+        Test::all_tests = false; \
+        std::cout << "ERROR: Caught unexpected std::exception" << std::endl; \
+        std::cout << "\tMessage: " << e.what() << std::endl; \
     }        \
     std::cout << Test::test_count << " tests of " << Test::test_name << " run. " \
               << Test::test_pass_count  << " passed, " \
@@ -121,7 +120,9 @@ try {
             break;                                             \
         case 2:                                      \
             std::cout << "Wrong exception thrown!\n";\
-            break;                                   \
-    }
+            break;                               \
+        default:                                 \
+            throw std::runtime_error("Unknown exceptionLevel");      \
+     }
 
 #endif // TESTING_HPP
