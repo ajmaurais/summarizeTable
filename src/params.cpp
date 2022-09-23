@@ -109,6 +109,8 @@ bool params::Option::setValue(std::string value) {
         if(!value.empty()) return false;
         if(_action == ACTION::STORE_TRUE) _value = "true";
         if(_action == ACTION::STORE_FALSE) _value = "false";
+        if(_action == ACTION::HELP) _value = "true";
+        if(_action == ACTION::VERSION) _value = "true";
     }
     else if(_isPositional && value.empty()) {
         return false;
@@ -230,6 +232,12 @@ void params::Params::addOption(std::string shortOpt, std::string longOpt, std::s
     _options[option.getName()] = option;
 }
 
+//! Set program version and add version option.
+void params::Params::setVersion(std::string version, std::string shortOpt, std::string longOpt) {
+    _version = version;
+    addOption(shortOpt, longOpt, "Print version and exit", Option::TYPE::BOOL, "false", Option::ACTION::VERSION);
+}
+
 void params::Params::addArgument(std::string name, std::string help, params::Option::TYPE valueType) {
     _args.emplace_back(name, help, valueType);
 }
@@ -241,10 +249,16 @@ bool params::Params::isOption(std::string arg) const {
 }
 
 void params::Params::printHelp() const {
-    std::cout << "Usage: " << signature() << "\n\n" << _description << "\n\nPositional arguments:";
+    size_t indent = 2;
+    std::cout << "Usage: " << signature() << "\n\n" << Option::multiLineString(_description, indent);
+
+    //options
+
+
+    // positional arguments
+    if(!_args.empty()) std::cout << "\n\nPositional arguments:";
     for(const auto& arg: _args)
         arg.signature();
-
 }
 
 std::string params::Params::signature() const {
@@ -261,6 +275,10 @@ std::string params::Params::signature() const {
 
 void params::Params::usage(std::ostream& out) const {
     out << signature();
+}
+
+void params::Params::printVersion() const {
+    std::cout << _programName << " " << _version << std::endl;
 }
 
 bool params::Params::parseArgs(int argc, char **argv)
@@ -288,7 +306,9 @@ bool params::Params::parseArgs(int argc, char **argv)
                     }
                 }
                 if(!_options[option].setValue(value)) {
-                    std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
+                    if(_options[option].getAction() == Option::ACTION::HELP) printHelp();
+                    if(_options[option].getAction() == Option::ACTION::VERSION) printVersion();
+                    else std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
                     return false;
                 }
             } else {

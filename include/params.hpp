@@ -17,7 +17,7 @@ namespace params {
         };
         enum ACTION {
             // TODO: Add help and version actions.
-            STORE_TRUE, STORE_FALSE, NONE
+            STORE_TRUE, STORE_FALSE, HELP, VERSION, NONE
         };
 
         static size_t maxLineLen;
@@ -78,6 +78,7 @@ namespace params {
         std::string _description;
         std::string _programName;
         bool _help;
+        std::string _version;
 
         static bool isFlag(std::string arg) {
             return !arg.empty() && arg[0] == '-';
@@ -89,12 +90,13 @@ namespace params {
             _programName = programName;
             _help = help;
             if(_help) addOption("h", "help", "Show help and exit.",
-                                Option::TYPE::BOOL, "false", Option::ACTION::STORE_TRUE);
+                                Option::TYPE::BOOL, "false", Option::ACTION::HELP);
         }
 
         void addOption(std::string shortOpt, std::string longOpt, std::string help,
                        Option::TYPE valueType, std::string defaultVal = "",
                        Option::ACTION action = Option::ACTION::NONE);
+        void setVersion(std::string version, std::string shortOpt = "v", std::string longOpt = "version");
         void addArgument(std::string name, std::string help,
                          Option::TYPE valueType = Option::TYPE::STRING);
         bool parseArgs(int, char**);
@@ -102,6 +104,10 @@ namespace params {
         std::string signature() const;
         void printHelp() const;
         void usage(std::ostream& = std::cerr) const;
+        std::string getVersion() const {
+            return _version;
+        }
+        void printVersion() const;
     };
 }
 

@@ -98,7 +98,7 @@ START_TEST("Params")
             EXPECT_EXCEPTION(std::invalid_argument, params::Option("-s", "--str", "", params::Option::TYPE::STRING))
             EXPECT_EXCEPTION(std::invalid_argument, params::Option("s", "--str", "", params::Option::TYPE::STRING))
             EXPECT_EXCEPTION(std::invalid_argument, params::Option("s", "str", "", params::Option::TYPE::STRING,
-                                                                "true", params::Option::ACTION::STORE_TRUE))
+                                                                   "true", params::Option::ACTION::STORE_TRUE))
         END_SECTION
 
         START_SECTION("Test Params help")
@@ -118,13 +118,13 @@ START_TEST("Params")
 
             // test single line help signature
             params::Option helpOption("h", "help", "Display help message and exit.",
-                                      params::Option::TYPE::BOOL, "false", params::Option::ACTION::STORE_TRUE);
+                                      params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
             expected = "  -h, --help            Display help message and exit.";
             EXPECT_EQUAL(helpOption.signature(2), expected)
 
             // multi line help signature
             helpOption = params::Option("h", "help", "Display a really interesting and important help message that has more than 1 line",
-                                        params::Option::TYPE::BOOL, "false", params::Option::ACTION::STORE_TRUE);
+                                        params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
             expected = "  -h, --help            Display a really interesting and important help message\n"
                        "                        that has more than 1 line";
             EXPECT_EQUAL(helpOption.signature(2), expected)
@@ -134,7 +134,7 @@ START_TEST("Params")
                                       "lines. It will be the best help message the you will ever see in your life because "
                                       "it is so long and descriptive.";
             helpOption = params::Option("h", "help", longMessage,
-                                        params::Option::TYPE::BOOL, "false", params::Option::ACTION::STORE_TRUE);
+                                        params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
             expected = "  -h, --help            Display a really interesting and important help message\n"
                        "                        that has more than 2 lines. It will be the best help\n"
                        "                        message the you will ever see in your life because it is\n"
@@ -152,13 +152,13 @@ START_TEST("Params")
 
             // edge case
             helpOption = params::Option("h", "helpHelpPleasse", "Display help message and exit.",
-                                       params::Option::TYPE::BOOL, "false", params::Option::ACTION::STORE_TRUE);
+                                       params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
             expected = "  -h, --helpHelpPleasse Display help message and exit.";
             EXPECT_EQUAL(helpOption.signature(2), expected)
 
             // edge case
             helpOption = params::Option("h", "helpHelpPleasse", "Display help message and exit.",
-                                        params::Option::TYPE::BOOL, "false", params::Option::ACTION::STORE_TRUE);
+                                        params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
             expected = "-h, --helpHelpPleasse\n"
                        "                    Display help message and exit.";
             params::Option::indendentLen = 20;
@@ -175,7 +175,10 @@ START_TEST("Params")
             params::Option::indendentLen = 22;
             EXPECT_EQUAL(helpOption.signature(5), expected)
 
-            // std::string obsd = helpOption.signature(5);
+            params::Option positional("a_positional_arg", "A positional argument.", params::Option::TYPE::STRING);
+            expected = "  a_positional_arg      A positional argument.";
+            std::string obsd = positional.signature(2);
+            EXPECT_EQUAL(positional.signature(2), expected)
         END_SECTION
 
         START_SECTION("Test arg parsing")
@@ -187,7 +190,7 @@ START_TEST("Params")
             EXPECT_EQUAL(params::Option::parseOption("---help"), "-help")
 
             params::Params args("A test argument parser.");
-            char* argv []= {""};
+            char* argv []= {"/Users/Aaron/code/summarizeTable/build/test/test_Params"};
         END_SECTION
 
 END_TEST
