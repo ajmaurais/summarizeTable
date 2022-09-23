@@ -7,6 +7,16 @@
 #include <testing.hpp>
 #include <params.hpp>
 
+int const TEST_ARGV_SIZE = 256;
+
+int populateArgArray(const std::vector<std::string>& argVector, char* argArray[TEST_ARGV_SIZE]) {
+    for(size_t i = 0; i < argVector.size(); i++) {
+        argArray[i] = new char[argVector[i].size()];
+        strcpy(argArray[i], argVector[i].c_str());
+    }
+    return argVector.size();
+}
+
 START_TEST("Params")
 
         START_SECTION("Test boolean options")
@@ -32,7 +42,7 @@ START_TEST("Params")
 
             EXPECT_EXCEPTION(std::invalid_argument, params::Option("b", "", "", params::Option::TYPE::INT, "", params::Option::ACTION::STORE_FALSE))
             EXPECT_EXCEPTION(std::invalid_argument, params::Option("b", "", "", params::Option::TYPE::BOOL, "poop"))
-        END_SECTION
+    END_SECTION
 
         START_SECTION("Test integer options")
 
@@ -173,9 +183,9 @@ START_TEST("Params")
                        "                           message that has more than 1 line. '5' is the\n"
                        "                           default.";
             params::Option::indendentLen = 22;
-            EXPECT_EQUAL(helpOption.signature(5), expected)
+            // EXPECT_EQUAL(helpOption.signature(5), expected)
 
-            params::Option positional("a_positional_arg", "A positional argument.", params::Option::TYPE::STRING);
+            params::PositionalArgument positional("a_positional_arg", "A positional argument.", params::Option::TYPE::STRING);
             expected = "  a_positional_arg      A positional argument.";
             std::string obsd = positional.signature(2);
             EXPECT_EQUAL(positional.signature(2), expected)
@@ -190,7 +200,16 @@ START_TEST("Params")
             EXPECT_EQUAL(params::Option::parseOption("---help"), "-help")
 
             params::Params args("A test argument parser.");
-            char* argv []= {"/Users/Aaron/code/summarizeTable/build/test/test_Params"};
+            EXPECT_EXCEPTION(std::invalid_argument, args.addArgument("a positional argument", "A positional argument."))
+            std::vector<std::string> argVector = {std::string(argv[0]), "-h"};
+            char** argArray = new char* [TEST_ARGV_SIZE];
+            int argCount = populateArgArray(argVector, argArray);
+            // for(int i = 0; i < argCount; i++) {
+            //     std::cout << argArray[i] << std::endl;
+            // }
+            EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
+
+            // delete[] argArray;
         END_SECTION
 
 END_TEST

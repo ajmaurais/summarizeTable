@@ -7,6 +7,23 @@
 
 #include <iostream>
 
+#define NO_TRY_CATCH
+#ifdef NO_TRY_CATCH
+#define TRY // a statement that has no effect
+#define CATCH // a statement that hat no effect
+#else
+#define TRY try {
+#define CATCH \
+    }             \
+    catch ( std::exception& e) { \
+        Test::this_test = false; \
+        Test::test = false;      \
+        Test::all_tests = false; \
+        std::cout << "ERROR: Caught unexpected std::exception" << std::endl; \
+        std::cout << "\tMessage: " << e.what() << std::endl; \
+    }
+#endif
+
 namespace Test {
 
     extern bool this_test;
@@ -55,17 +72,10 @@ namespace Test {
     int main(int argc, char** argv) \
     {                          \
        std::cout << "Running test of " << Test::test_name << std::endl;                 \
-       try {
+       TRY
 
 #define END_TEST \
-    }             \
-    catch ( std::exception& e) { \
-        Test::this_test = false; \
-        Test::test = false;      \
-        Test::all_tests = false; \
-        std::cout << "ERROR: Caught unexpected std::exception" << std::endl; \
-        std::cout << "\tMessage: " << e.what() << std::endl; \
-    }        \
+    CATCH             \
     std::cout << Test::test_count << " tests of " << Test::test_name << " run. " \
               << Test::test_pass_count  << " passed, " \
               << Test::test_count - Test::test_pass_count << " failed." << std::endl; \
@@ -79,18 +89,10 @@ Test::test_section_count = 0;         \
 Test::test_section_pass_count = 0; \
 Test::section_name = # nameOfSection; \
 std::cout << "Checking " << Test::section_name << " ... " << std::endl; \
-try {
+TRY
 
 #define END_SECTION \
-    }                \
-    catch ( std::exception& e) \
-    { \
-      Test::this_test = false; \
-      Test::test = false;      \
-      Test::all_tests = false; \
-      std::cout << "ERROR: Caught unexpected std::exception" << std::endl; \
-      std::cout << "\tMessage: " << e.what() << std::endl; \
-    }               \
+    CATCH                \
     Test::all_tests = Test::all_tests && Test::test;                    \
     Test::test_pass_count += Test::test_section_pass_count;                \
     Test::test_count += Test::test_section_count;                \
