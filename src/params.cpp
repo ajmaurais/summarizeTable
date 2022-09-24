@@ -8,6 +8,7 @@ size_t params::Argument::indendentLen = params::INDENT_LEN;
 std::string params::Argument::typeToStr(params::Argument::TYPE type) {
     switch(type) {
         case STRING: return "std::string";
+        case CHAR: return "char";
         case BOOL: return "bool";
         case INT: return "int";
         case FLOAT: return "float";
@@ -116,6 +117,7 @@ bool params::Option::isValid(std::string value) const {
 //! Check if \p value can be converted into \p params::Argument::valueType.
 bool params::Argument::isValid(std::string value) const {
     if(_valueType == TYPE::STRING) return true; // it's already a string so it's valid.
+    if(_valueType == TYPE::CHAR) return value.size() == 1;
     if(_valueType == TYPE::BOOL) {
         return std::regex_match(value, std::regex("^(true|false|0|1)$", std::regex_constants::icase));
     }
@@ -390,7 +392,7 @@ bool params::Params::checkPositionalArgs() const {
         if(!arg.second.isValid()) {
             if(allGood) usage();
             allGood = false;
-            std::cout << "Invalid argument for '" <<  arg.second.getName() << "': "
+            std::cerr << "\nInvalid argument for '" <<  arg.second.getName() << "': "
                       << arg.second.invalidReason() << std::endl;
         }
     }
@@ -472,9 +474,18 @@ bool params::Params::parseArgs(int argc, char** argv)
     return true;
 }
 
+void params::Argument::toType(const std::string& value, char& dest) const {
+    if(_valueType != CHAR) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
+    dest = value[0];
+}
+
 void params::Argument::toType(const std::string& value, bool& dest) const {
     if(_valueType != BOOL) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
-    dest = bool(std::stoi(value));
+    std::string temp = value;
+    std::transform(temp.begin(), temp.end(), temp.begin(), ::tolower);
+    if(temp == "true") dest = true;
+    else if(temp == "false") dest = false;
+    else dest = bool(std::stoi(value));
 }
 
 void params::Argument::toType(const std::string& value, int& dest) const {

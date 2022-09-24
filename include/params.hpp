@@ -22,7 +22,7 @@ namespace params {
     class Argument {
     public:
         enum TYPE {
-            STRING, BOOL, INT, FLOAT
+            STRING, CHAR, BOOL, INT, FLOAT
         };
         static std::string typeToStr(TYPE);
 
@@ -30,6 +30,7 @@ namespace params {
         static std::string validArgNamePattern;
         static size_t maxLineLen;
         static size_t indendentLen;
+        void toType(const std::string&, char&) const;
         void toType(const std::string&, bool&) const;
         void toType(const std::string&, int&) const;
         void toType(const std::string&, float&) const;
