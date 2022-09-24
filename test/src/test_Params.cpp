@@ -209,7 +209,21 @@ START_TEST("Params")
             // }
             EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
 
-            // delete[] argArray;
+            // Test argument order parsing
+            args.addArgument("source", "Source file(s)", 1, std::string::npos);
+            args.addArgument("dest", "Destination");
+            argVector = {std::string(argv[0]), "file1", "file2", "dest"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
+            EXPECT_EQUAL(args.getArgumentValues("source").size(), 2)
+            EXPECT_EQUAL(args.getArgumentValues("dest").size(), 1)
+            EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValues<int>("source"))
+
+            argVector = {std::string(argv[0]), "dest"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
+
+            delete[] argArray;
         END_SECTION
 
 END_TEST

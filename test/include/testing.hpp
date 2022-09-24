@@ -7,11 +7,8 @@
 
 #include <iostream>
 
-#define NO_TRY_CATCH
-#ifdef NO_TRY_CATCH
-#define TRY // a statement that has no effect
-#define CATCH // a statement that hat no effect
-#else
+// #define NO_TRY_CATCH
+#ifndef NO_TRY_CATCH
 #define TRY try {
 #define CATCH \
     }             \
@@ -22,6 +19,9 @@
         std::cout << "ERROR: Caught unexpected std::exception" << std::endl; \
         std::cout << "\tMessage: " << e.what() << std::endl; \
     }
+#else
+#define TRY // a statement that has no effect
+#define CATCH // a statement that hat no effect
 #endif
 
 namespace Test {

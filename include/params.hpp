@@ -10,7 +10,7 @@
 #include <algorithm>
 
 namespace params {
-    const size_t MAX_LINE_LEN = 80;
+    const size_t MAX_LINE_LEN = 100;
     const size_t INDENT_LEN = 22;
 
     std::string multiLineString(std::string addStr, size_t margin,
@@ -24,15 +24,18 @@ namespace params {
         enum TYPE {
             STRING, BOOL, INT, FLOAT
         };
+        static std::string typeToStr(TYPE);
 
         //! Argument names must begin with a letter and have only alphanumeric characters, dash or underscore after.
         static std::string validArgNamePattern;
         static size_t maxLineLen;
         static size_t indendentLen;
+        void toType(const std::string&, bool&) const;
+        void toType(const std::string&, int&) const;
+        void toType(const std::string&, float&) const;
     protected:
         std::string _name;
         std::string _help;
-        std::string _value;
 
         TYPE _valueType;
 
@@ -51,7 +54,6 @@ namespace params {
             _name = name;
             _checkValidName();
         }
-        virtual bool setValue(std::string = "") = 0;
 
         virtual bool isValid() const = 0;
         virtual bool isValid(std::string) const;
@@ -60,6 +62,9 @@ namespace params {
         }
         TYPE getType() const {
             return _valueType;
+        }
+        bool isSet() const {
+            return _isSet;
         }
 
         virtual std::string help() const;
@@ -77,6 +82,7 @@ namespace params {
         std::string _longOpt;
         std::string _defaultValue;
         ACTION _action;
+        std::string _value;
 
         void _checkOptFlags() const;
     public:
@@ -88,28 +94,56 @@ namespace params {
         Option(const Option&);
         Option& operator = (const Option& rhs);
 
-        bool setValue(std::string value) override;
+        bool setValue(std::string value);
 
-        ACTION getAction() const {
-            return _action;
-        }
+        ACTION getAction() const { return _action; }
         bool isValid(std::string) const override;
         bool isValid() const override;
         std::string help() const override;
-        std::string signature(int margin = 0) const override;
+        std::string signature(int margin) const override;
+        std::string getValue() const { return _value; };
+        template <typename T> T getValue() const {
+            T temp;
+            toType(_value, temp);
+            return temp;
+        }
 
         static std::string parseOption(std::string arg);
     };
 
     class PositionalArgument : public Argument {
+    private:
+        std::vector<std::string> _values;
+        size_t _minValues, _maxValues;
+
     public:
-        PositionalArgument() : Argument() {}
-        PositionalArgument(std::string name, std::string help, TYPE valueType);
+        PositionalArgument() : Argument() {
+            _minValues = 1;
+            _maxValues = 1;
+        }
+        PositionalArgument(std::string name, std::string help,
+                           size_t minValues = 1, size_t maxValues = 1, TYPE valueType = STRING);
 
-        bool setValue(std::string) override;
+        bool addValue(std::string);
 
+        size_t getMinArgs() const { return _minValues; }
+        size_t getMaxArgs() const { return _maxValues; }
         bool isValid() const override;
-        std::string signature(int margin = 0) const override;
+        std::string invalidReason() const;
+        std::string signature(int margin) const override;
+        std::vector<std::string> getValues() const;
+        size_t getArgCount() const {
+            return _values.size();
+        }
+        template <typename T> std::vector<T> getValues() const {
+            std::vector<T> ret;
+            T temp;
+            for(const auto& value: _values) {
+                toType(value, temp);
+                ret.push_back(temp);
+            }
+            return ret;
+        }
     };
 
     class Params {
@@ -138,6 +172,8 @@ namespace params {
         }
         bool isOption(std::string arg) const;
         bool parsePositionalArgs(int, int, char**);
+        void validatePositionalArgs() const;
+        params::PositionalArgument* _nextArg(size_t&, bool);
     public:
         explicit Params(std::string description = "", std::string programName = "", bool help = true) {
             _description = description;
@@ -153,6 +189,7 @@ namespace params {
                        Option::ACTION action = Option::ACTION::NONE);
         void setVersion(std::string version, std::string shortOpt = "v", std::string longOpt = "version");
         void addArgument(std::string name, std::string help,
+                         size_t minArgs = 1, size_t maxArgs = 1,
                          Option::TYPE valueType = Option::TYPE::STRING);
         void setHelpMargin(int margin) {
             _helpMargin = margin;
@@ -169,6 +206,24 @@ namespace params {
             return _version;
         }
         void printVersion() const;
+
+        // get option/arg values
+        std::string getOptionValue(std::string option) const;
+        bool optionIsSet(std::string option) const {
+            return _options.at(_optionKeys.at(option)).isSet();
+        }
+        template <typename T> T getOptionValue(std::string option) const {
+            return _options.at(_optionKeys.at(option)).getValue<T>();
+        }
+
+        std::vector<std::string> getArgumentValues(std::string argName) const;
+        size_t nArgs(std::string argName) const;
+        size_t nPositionalArgs() const { return _args.size(); }
+        template <typename T> std::vector<T> getArgumentValues(std::string argName) const {
+            return _args.at(argName).getValues<T>();
+        }
+
+        bool checkPositionalArgs() const;
     };
 }
 
