@@ -72,6 +72,7 @@ params::PositionalArgument::PositionalArgument(std::string name, std::string hel
     _help = help;
     _valueType = valueType;
     _minValues = minValues;
+    if(maxValues < 1) throw std::invalid_argument("Can not have less than 1 maxValue for PositionalArgument");
     _maxValues = maxValues;
 }
 
@@ -137,9 +138,9 @@ bool params::Option::isValid() const {
 }
 
 bool params::PositionalArgument::isValid () const {
+    if(getArgCount() < _minValues || getArgCount() > _maxValues)
+        return false;
     for(const auto& value: _values) {
-        if(getArgCount() < _minValues || getArgCount() > _maxValues)
-            return false;
         if (!Argument::isValid(value))
             return false;
     }
@@ -147,11 +148,11 @@ bool params::PositionalArgument::isValid () const {
 }
 
 std::string params::PositionalArgument::invalidReason() const {
+    if(getArgCount() < _minValues)
+        return "Not enough arguments given!";
+    if(getArgCount() > _maxValues)
+        return "Too many arguments given!";
     for(const auto& value: _values) {
-        if(getArgCount() < _minValues)
-            return "Not enough arguments given!";
-        if(getArgCount() > _maxValues)
-            return "Too many arguments given!";
         if (!Argument::isValid(value))
             return "No viable conversion of " + value + " to " + typeToStr(_valueType);
     }
@@ -176,6 +177,11 @@ bool params::Option::setValue(std::string value) {
     return false;
 }
 
+void params::Option::unsetValue() {
+    _isSet = false;
+    _value = _defaultValue;
+}
+
 bool params::PositionalArgument::addValue(std::string value) {
     _values.push_back(value);
     if(Argument::isValid(value)) {
@@ -183,6 +189,11 @@ bool params::PositionalArgument::addValue(std::string value) {
         return true;
     }
     return false;
+}
+
+void params::PositionalArgument::unsetValues() {
+    _isSet = false;
+    _values.clear();
 }
 
 std::string params::Option::parseOption(std::string arg) {
@@ -282,7 +293,7 @@ void params::Params::addOption(std::string shortOpt, std::string longOpt, std::s
     }
 }
 
-//! Set program version and add version option.
+//! Set program version and add version option flag;
 void params::Params::setVersion(std::string version, std::string shortOpt, std::string longOpt) {
     _version = version;
     addOption(shortOpt, longOpt, "Print version and exit", Option::TYPE::BOOL, "false", Option::ACTION::VERSION);
@@ -302,14 +313,13 @@ void params::Params::addArgument(std::string name, std::string help,
  * @param arg A potential option flag (with dash included).
  * @return true if \p arg is an existing option.
  */
-bool params::Params::isOption(std::string arg) const {
+bool params::Params::_isOption(std::string arg) const {
     if(!isFlag(arg)) return false;
     std::string key = Option::parseOption(arg);
     return _optionKeys.find(key) != _optionKeys.end();
 }
 
 void params::Params::printHelp() const {
-    size_t margin = 2;
     std::cout << "Usage: " << signature() << "\n\n" << params::Option::multiLineString(_description, 0) << "\n";
 
     //options
@@ -317,11 +327,12 @@ void params::Params::printHelp() const {
         std::cout << "\nOptions:";
         for(const auto& option: _optionOrder)
             std::cout << std::endl << _options.at(option).signature(_helpMargin);
+        std::cout << std::endl;
     }
 
     // positional arguments
     if(!_args.empty()) {
-        std::cout << "\n\nPositional arguments:";
+        std::cout << "\nPositional arguments:";
         for (const auto &arg: _argOrder)
             std::cout << std::endl << _args.at(arg).signature(_helpMargin);
     }
@@ -333,9 +344,10 @@ std::string params::Params::signature() const {
     if(!_options.empty()) ret += " [options]";
     if(!_args.empty()) {
         for(const auto& arg: _argOrder) {
+            ret += " ";
             if(_args.at(arg).getMinArgs() == 0)
                 ret += "[";
-            ret += " <" + _args.at(arg).getName() + ">";
+            ret += "<" + _args.at(arg).getName() + ">";
             if(_args.at(arg).getMaxArgs() > 1)
                 ret += " [...]";
             else if(_args.at(arg).getMinArgs() == 0)
@@ -365,8 +377,8 @@ params::PositionalArgument* params::Params::_nextArg(size_t& currentArgIndex, bo
     return &_args.at(_argOrder[currentArgIndex]);
 }
 
-bool params::Params::parsePositionalArgs(int i, int argc, char** argv) {
-    validatePositionalArgs();
+bool params::Params::_parsePositionalArgs(int i, int argc, char** argv) {
+    _validatePositionalArgs();
     params::PositionalArgument* currentArg = nullptr;
     size_t currentArgIndex = 0;
     for(; i < argc ; i++) {
@@ -385,7 +397,7 @@ bool params::Params::parsePositionalArgs(int i, int argc, char** argv) {
     return checkPositionalArgs();
 }
 
-//! Check that the number of required positional args were given by the user
+//! Check that the number of required positional args were given by the user on the command line.
 bool params::Params::checkPositionalArgs() const {
     bool allGood = true;
     for(const auto& arg: _args) {
@@ -399,8 +411,8 @@ bool params::Params::checkPositionalArgs() const {
     return allGood;
 }
 
-//! Check that the structure of the positional arguments is valid
-void params::Params::validatePositionalArgs() const {
+//! Check that the structure of the positional arguments set by the developer is valid.
+void params::Params::_validatePositionalArgs() const {
     int infArgCount = 0;
     size_t nArgs = _argOrder.size();
     for(size_t i = 0; i < nArgs; i++) {
@@ -415,9 +427,35 @@ void params::Params::validatePositionalArgs() const {
         throw std::runtime_error("Can not have more than 1 positional argument with infinite values.");
 }
 
+bool params::Params::_doOptionAction(Option::ACTION action, bool& returnVal) const {
+    HELP_VERSION_BEHAVIOR behavior;
+    if(action == Option::HELP) {
+        printHelp();
+        behavior = _helpBehavior;
+    }
+    if(action == Option::VERSION) {
+        printVersion();
+        behavior = _versionBehavior;
+    }
+
+    returnVal = true;
+    switch(behavior) {
+        case CONTINUE: return false;
+        case RETURN_TRUE:
+            returnVal = true;
+            return true;
+        case RETURN_FALSE:
+            returnVal = false;
+            return true;
+        case EXIT_0: exit(0);
+        case EXIT_1: exit(1);
+    }
+}
+
 bool params::Params::parseArgs(int argc, char** argv)
 {
-    validatePositionalArgs();
+    clearArgs();
+    _validatePositionalArgs();
     if(_programName.empty())
         _programName = std::filesystem::path(std::string(argv[0])).filename();
     for(int i = 1; i < argc; i++)
@@ -425,50 +463,47 @@ bool params::Params::parseArgs(int argc, char** argv)
         if(isFlag(std::string(argv[i])))
         {
             std::string option = std::string(argv[i]);
-            if(isOption(option))
-            {
-                std::string value;
-                std::string key = _optionKeys.at(Option::parseOption(option));
-                if(_options.at(key).getAction() == Option::ACTION::HELP) {
-                    printHelp();
-                    return false;
-                }
-                if(_options.at(key).getAction() == Option::ACTION::VERSION) {
-                    printVersion();
-                    return false;
-                }
-
-                if(_options.at(key).getType() == Option::TYPE::BOOL &&
-                   _options.at(key).getAction() != Option::ACTION::NONE) {
-                    value = "";
-                }
-                else {
-                    if(i + 1 >= argc || !isFlag(std::string(argv[++i]))) {
-                        value = std::string(argv[i]);
-                    } else {
-                        std::cerr << "ERROR: Argument required for " << option << "'\n";
-                        return false;
-                    }
-                }
-                if(!_options.at(key).setValue(value)) {
-                    std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
-                    return false;
-                }
-            } else {
+            if(!_isOption(option)) {
                 std::cerr << "ERROR: '" << option << "' is an unknown option\n";
+                return false;
+            }
+
+            std::string value;
+            std::string key = _optionKeys.at(Option::parseOption(option));
+            if(_options.at(key).getAction() == Option::HELP || _options.at(key).getAction() == Option::VERSION) {
+                bool returnVal;
+                if(_doOptionAction(_options.at(key).getAction(), returnVal))
+                    return returnVal;
+            }
+
+            if(_options.at(key).getType() == Option::TYPE::BOOL &&
+               _options.at(key).getAction() != Option::ACTION::NONE) {
+                value = "";
+            }
+            else {
+                if(i + 1 >= argc || !isFlag(std::string(argv[++i]))) {
+                    value = std::string(argv[i]);
+                } else {
+                    std::cerr << "ERROR: Missing argument for '" << option << "'\n";
+                    return false;
+                }
+            }
+            if(!_options.at(key).setValue(value)) {
+                std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
+                return false;
             }
         }
         else if (strcmp(argv[i], "-") == 0) {
             switch (_singleDashBehavior) {
                 case START_POSITIONAL:
-                    return parsePositionalArgs(i, argc, argv);
+                    return _parsePositionalArgs(i, argc, argv);
                 case ERROR:
                     usage();
                     return false;
             }
         }
         else { // we are in positional arguments
-            return parsePositionalArgs(i, argc, argv);
+            return _parsePositionalArgs(i, argc, argv);
         }
     }
     return true;
@@ -502,9 +537,35 @@ std::vector<std::string> params::Params::getArgumentValues(std::string argName) 
     return _args.at(argName).getValues();
 }
 
+/**
+ * Return a single argument for PositionalArguments that can only have a single value.
+ * @return The argument value
+ * @throws std::runtime_error If the PositionalArgument can have more than 1 value.
+ * @throws std::out_of_range If no value was given for PositionalArgument on the command line.
+ */
+std::string params::PositionalArgument::getValue() const {
+    if (_minValues > 1 || _maxValues > 1)
+        throw std::runtime_error("Calls to this function are invalid when there are more than 1 values for argument!");
+    if (getArgCount() != 1)
+        throw std::out_of_range("'" + _name + "' is empty!");
+    return _values[0];
+}
+
 //! Number of args given for \p argName on the command line.
 size_t params::Params::nArgs(std::string argName) const {
     return _args.at(argName).getArgCount();
+}
+
+std::string params::Params::getOptionValue(std::string option) const {
+    return _options.at(_optionKeys.at(option)).getValue();
+}
+
+//! Return options to their default state, and clear positional arguments
+void params::Params::clearArgs() {
+    for (auto it = _options.begin(); it != _options.end(); ++it)
+        it->second.unsetValue();
+    for (auto it = _args.begin(); it != _args.end(); ++it)
+        it->second.unsetValues();
 }
 
 std::vector<std::string> params::PositionalArgument::getValues() const {

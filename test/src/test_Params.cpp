@@ -204,10 +204,10 @@ START_TEST("Params")
             std::vector<std::string> argVector = {std::string(argv[0]), "-h"};
             char** argArray = new char* [TEST_ARGV_SIZE];
             int argCount = populateArgArray(argVector, argArray);
-            // for(int i = 0; i < argCount; i++) {
-            //     std::cout << argArray[i] << std::endl;
-            // }
+            args.setHelpBehavior(params::Params::RETURN_FALSE);
             EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
+            args.setHelpBehavior(params::Params::RETURN_TRUE);
+            EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
 
             // Test argument order parsing
             args.addArgument("source", "Source file(s)", 1, std::string::npos);
@@ -217,11 +217,54 @@ START_TEST("Params")
             EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
             EXPECT_EQUAL(args.getArgumentValues("source").size(), 2)
             EXPECT_EQUAL(args.getArgumentValues("dest").size(), 1)
+            EXPECT_EQUAL(args.getArgumentValue("dest"), "dest")
             EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValues<int>("source"))
+            EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValue("source"))
+            EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValues("poop"))
+            EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValue("poop"))
+            argVector = {std::string(argv[0]), "-", "file1", "file2", "dest"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
 
             argVector = {std::string(argv[0]), "dest"};
             argCount = populateArgArray(argVector, argArray);
+            // for(int i = 0; i < argCount; i++) std::cout << argArray[i] << std::endl;
             EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
+
+            // Real program test
+            params::Params programArgs("Summarize information in tsv/csv files.");
+            programArgs.setHelpBehavior(params::Params::RETURN_FALSE);
+            programArgs.setSingleDashBehavior(params::Params::START_POSITIONAL);
+            programArgs.addOption("n", "", "Number of lines to look for data types.", params::Option::TYPE::INT, "5");
+            programArgs.addOption("p", "rows", "Number of rows to print.", params::Option::TYPE::INT, "1");
+            programArgs.addOption("", "noHeader", "Don't treat first line as header.",
+                           params::Option::BOOL, "false", params::Option::STORE_TRUE);
+            programArgs.addOption("F", "sep", "Field separator.", params::Option::CHAR, "\t");
+            programArgs.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
+
+            argVector = {std::string(argv[0]), "--help"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+            argVector = {std::string(argv[0]), ""};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), true)
+            EXPECT_EQUAL(programArgs.getOptionValue<int>("rows"), 1)
+            argVector = {std::string(argv[0]), "-n", "--rows", "-F" "\t"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+            argVector = {std::string(argv[0]), "-n", "50", "--rows", "-F", "\t"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+            argVector = {std::string(argv[0]), "-n", "50", "--rows", "2", "-F", "'\t'"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), true)
+            EXPECT_EQUAL(programArgs.getOptionValue<int>("n"), 50)
+            EXPECT_EQUAL(programArgs.getOptionValue<char>("F"), '\t')
+            EXPECT_EQUAL(programArgs.getOptionValue<char>("sep"), '\t')
+            EXPECT_EQUAL(programArgs.getOptionValue<int>("rows"), 2)
+            argVector = {std::string(argv[0]), "-n", "50", "--rows", "2", "-F", "','", "poop", "pee"};
+            argCount = populateArgArray(argVector, argArray);
+            EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
 
             delete[] argArray;
         END_SECTION

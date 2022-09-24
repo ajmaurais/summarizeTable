@@ -96,6 +96,7 @@ namespace params {
         Option& operator = (const Option& rhs);
 
         bool setValue(std::string value);
+        void unsetValue();
 
         ACTION getAction() const { return _action; }
         bool isValid(std::string) const override;
@@ -126,6 +127,7 @@ namespace params {
                            size_t minValues = 1, size_t maxValues = 1, TYPE valueType = STRING);
 
         bool addValue(std::string);
+        void unsetValues();
 
         size_t getMinArgs() const { return _minValues; }
         size_t getMaxArgs() const { return _maxValues; }
@@ -133,6 +135,7 @@ namespace params {
         std::string invalidReason() const;
         std::string signature(int margin) const override;
         std::vector<std::string> getValues() const;
+        std::string getValue() const;
         size_t getArgCount() const {
             return _values.size();
         }
@@ -145,13 +148,27 @@ namespace params {
             }
             return ret;
         }
+        template <typename T> T getValue() const {
+            T ret;
+            toType(getValue(), ret);
+            return ret;
+        }
     };
 
     class Params {
     public:
-        //! behavior for when a single dash ('-') is given as an argument.
+        //! Behavior for when a single dash ('-') is given as an argument.
         enum SINGLE_DASH {
             START_POSITIONAL, ERROR
+        };
+
+        //! Behavior for Option::ACTION::HELP or Option::ACTION::VERSION
+        enum HELP_VERSION_BEHAVIOR {
+            CONTINUE, //! Continue parsing arguments as normal
+            RETURN_TRUE, //! return true from parseArgs function.
+            RETURN_FALSE, //! return false from parseArgs function.
+            EXIT_1, //! Exit with return code of 1.
+            EXIT_0 //! Exit with return code of 0.
         };
     private:
         // arguments and options
@@ -167,14 +184,17 @@ namespace params {
         std::string _version;
         int _helpMargin;
         SINGLE_DASH _singleDashBehavior;
+        HELP_VERSION_BEHAVIOR _helpBehavior;
+        HELP_VERSION_BEHAVIOR _versionBehavior;
 
         static bool isFlag(std::string arg) {
             return !arg.empty() && arg[0] == '-';
         }
-        bool isOption(std::string arg) const;
-        bool parsePositionalArgs(int, int, char**);
-        void validatePositionalArgs() const;
+        bool _isOption(std::string arg) const;
+        bool _parsePositionalArgs(int, int, char**);
+        void _validatePositionalArgs() const;
         params::PositionalArgument* _nextArg(size_t&, bool);
+        bool _doOptionAction(Option::ACTION, bool&) const;
     public:
         explicit Params(std::string description = "", std::string programName = "", bool help = true) {
             _description = description;
@@ -182,6 +202,8 @@ namespace params {
             _help = help;
             _helpMargin = 2;
             _singleDashBehavior = ERROR;
+            _helpBehavior = EXIT_0;
+            _versionBehavior = EXIT_0;
             if(_help) addOption("h", "help", "Show help and exit.", Option::TYPE::BOOL, "false", Option::ACTION::HELP);
         }
 
@@ -198,7 +220,14 @@ namespace params {
         void setSingleDashBehavior(SINGLE_DASH behavior) {
             _singleDashBehavior = behavior;
         }
+        void setHelpBehavior(HELP_VERSION_BEHAVIOR behavior) {
+            _helpBehavior = behavior;
+        }
+        void setVersionBehavior(HELP_VERSION_BEHAVIOR behavior) {
+            _versionBehavior = behavior;
+        }
         bool parseArgs(int, char**);
+        void clearArgs();
 
         std::string signature() const;
         void printHelp() const;
@@ -209,22 +238,31 @@ namespace params {
         void printVersion() const;
 
         // get option/arg values
+        bool checkPositionalArgs() const;
         std::string getOptionValue(std::string option) const;
-        bool optionIsSet(std::string option) const {
+        bool optionIsSet(const std::string& option) const {
             return _options.at(_optionKeys.at(option)).isSet();
         }
-        template <typename T> T getOptionValue(std::string option) const {
+        template <typename T> T getOptionValue(const std::string& option) const {
             return _options.at(_optionKeys.at(option)).getValue<T>();
         }
 
+        std::string getArgumentValue(const std::string& argName) const {
+            return _args.at(argName).getValue();
+        }
+        template <typename T> T getArgumentValue(const std::string& argName) const {
+            return _args.at(argName).getValue<T>();
+        }
         std::vector<std::string> getArgumentValues(std::string argName) const;
         size_t nArgs(std::string argName) const;
         size_t nPositionalArgs() const { return _args.size(); }
-        template <typename T> std::vector<T> getArgumentValues(std::string argName) const {
+        template <typename T> std::vector<T> getArgumentValues(const std::string& argName) const {
             return _args.at(argName).getValues<T>();
         }
-
-        bool checkPositionalArgs() const;
+        //! Get the number of arguments that were given for \p argName on the command line.
+        size_t getArgumentCount(const std::string& argName) const {
+            return _args.at(argName).getArgCount();
+        }
     };
 }
 
