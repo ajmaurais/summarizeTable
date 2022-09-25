@@ -26,21 +26,20 @@ void params::Argument::_checkValidName() const {
 }
 
 void params::Option::_checkOptFlags() const {
-    if(_shortOpt.empty() && _longOpt.empty())
+    if(_shortOpt == '\0' && _longOpt.empty())
         throw std::invalid_argument("Long or short option must be specified!");
-    if((!_shortOpt.empty() && _shortOpt[0] == '-') || (!_longOpt.empty() && _longOpt[0] == '-'))
+    if((_shortOpt != '\0' && _shortOpt == '-') || (!_longOpt.empty() && _longOpt[0] == '-'))
         throw std::invalid_argument("Option flags can not begin with '-'!");
-    if((!_shortOpt.empty() && !isValidName(_shortOpt)) || (!_longOpt.empty() && !isValidName(_longOpt)))
+    if((_shortOpt != '\0' && !isValidName(std::string(1, _shortOpt))) || (!_longOpt.empty() && !isValidName(_longOpt)))
         throw std::invalid_argument("Long or short option flag contain invalid characters!");
 }
 
-params::Option::Option(std::string shortOpt, std::string longOpt, std::string help,
-                       Option::TYPE valueType, std::string defaultVal,
-                       Option::ACTION action) {
+void params::Option::_initialize(char shortOpt, std::string longOpt, std::string help,
+                                 Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
     _shortOpt = shortOpt;
     _longOpt = longOpt;
     _checkOptFlags();
-    _name = _longOpt.empty() ? _shortOpt : _longOpt;
+    _name = _longOpt.empty() ? std::string(1, _shortOpt) : _longOpt;
     _help = help;
     _isSet = false;
     _valueType = valueType;
@@ -57,6 +56,16 @@ params::Option::Option(std::string shortOpt, std::string longOpt, std::string he
         throw std::invalid_argument(defaultVal + " is an invalid value for TYPE!");
     _value = defaultVal;
     _defaultValue = defaultVal;
+}
+
+params::Option::Option(char shortOpt, std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
+    _initialize(shortOpt, longOpt, help, valueType, defaultVal, action);
+}
+
+params::Option::Option(std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
+    _initialize('\0', longOpt, help, valueType, defaultVal, action);
 }
 
 params::Argument::Argument() {
@@ -184,6 +193,7 @@ void params::Option::unsetValue() {
 
 bool params::PositionalArgument::addValue(std::string value) {
     _values.push_back(value);
+
     if(Argument::isValid(value)) {
         _isSet = true;
         return true;
@@ -196,13 +206,34 @@ void params::PositionalArgument::unsetValues() {
     _values.clear();
 }
 
-std::string params::Option::parseOption(std::string arg) {
-    std::string ret = arg;
-    size_t len = std::min(size_t(2), arg.size());
+std::string params::unquote(std::string s) {
+    std::smatch match;
+    if(!std::regex_match(s, match, std::regex(R"(\"(.*)\"|'(.*)')")))
+        return s;
+    return (match.begin() + 1)->matched ? match[1] : match[2];
+}
+
+void params::Option::parseOption(std::string s, std::string& option, std::string& value) {
+    option.clear();
+    value.clear();
+    size_t len = std::min(size_t(2), s.size());
+    int dashCount = 0;
     for(size_t i = 0; i < len; i++) {
-        if(arg[i] == '-') ret.erase(0, 1);
+        if(s[0] == '-') {
+            s.erase(0, 1);
+            dashCount++;
+        }
     }
-    return ret;
+    if(dashCount == 1) { // short option
+        if(s.size() == 0) { // special case where option is '-'
+            option = "-";
+            return;
+        }
+        option = s[0];
+        value = unquote(s.substr(1));
+    } else {
+        option = s; // long option
+    }
 }
 
 std::string params::Argument::help() const {
@@ -256,8 +287,8 @@ std::string params::Option::signature(int margin) const {
     std::string ret;
     std::string name = (_action == ACTION::NONE ? _name : "");
     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
-    if(!_shortOpt.empty()) {
-        ret += "-" + _shortOpt + (name.empty() ? "" : ' ' + name);
+    if(_shortOpt != '\0') {
+        ret += "-" + std::string(1, _shortOpt) + (name.empty() ? "" : ' ' + name);
         if(!_longOpt.empty()) ret += ", ";
     }
     if(!_longOpt.empty())
@@ -274,7 +305,7 @@ std::string params::Argument::multiLineString(std::string addStr, size_t margin,
     return params::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
 }
 
-void params::Params::addOption(std::string shortOpt, std::string longOpt, std::string help,
+void params::Params::addOption(char shortOpt, std::string longOpt, std::string help,
                                params::Option::TYPE valueType, std::string defaultVal,
                                params::Option::ACTION action) {
     params::Option option(shortOpt, longOpt, help, valueType, defaultVal, action);
@@ -283,7 +314,7 @@ void params::Params::addOption(std::string shortOpt, std::string longOpt, std::s
     _optionOrder.push_back(name);
 
     // add option to _optionKeys map
-    std::string flags[2] = {shortOpt, longOpt};
+    std::string flags[2] = {(shortOpt == '\0' ? "" : std::string(1, shortOpt)), longOpt};
     for(auto & flag : flags) {
         if (!flag.empty()) {
             if(_optionKeys.find(flag) != _optionKeys.end())
@@ -293,8 +324,14 @@ void params::Params::addOption(std::string shortOpt, std::string longOpt, std::s
     }
 }
 
+void params::Params::addOption(std::string longOpt, std::string help,
+                               params::Option::TYPE valueType, std::string defaultVal,
+                               params::Option::ACTION action) {
+    addOption('\0', longOpt, help, valueType, defaultVal, action);
+}
+
 //! Set program version and add version option flag;
-void params::Params::setVersion(std::string version, std::string shortOpt, std::string longOpt) {
+void params::Params::setVersion(std::string version, char shortOpt, std::string longOpt) {
     _version = version;
     addOption(shortOpt, longOpt, "Print version and exit", Option::TYPE::BOOL, "false", Option::ACTION::VERSION);
 }
@@ -315,7 +352,8 @@ void params::Params::addArgument(std::string name, std::string help,
  */
 bool params::Params::_isOption(std::string arg) const {
     if(!isFlag(arg)) return false;
-    std::string key = Option::parseOption(arg);
+    std::string key, value;
+    Option::parseOption(arg, key, value);
     return _optionKeys.find(key) != _optionKeys.end();
 }
 
@@ -464,12 +502,22 @@ bool params::Params::parseArgs(int argc, char** argv)
         {
             std::string option = std::string(argv[i]);
             if(!_isOption(option)) {
+                if (option == "-") {
+                    switch (_singleDashBehavior) {
+                        case START_POSITIONAL:
+                            return _parsePositionalArgs(i, argc, argv);
+                        case ERROR:
+                            usage();
+                            return false;
+                    }
+                }
                 std::cerr << "ERROR: '" << option << "' is an unknown option\n";
                 return false;
             }
 
-            std::string value;
-            std::string key = _optionKeys.at(Option::parseOption(option));
+            std::string key, value;
+            Option::parseOption(option, key, value);
+            key = _optionKeys.at(key);
             if(_options.at(key).getAction() == Option::HELP || _options.at(key).getAction() == Option::VERSION) {
                 bool returnVal;
                 if(_doOptionAction(_options.at(key).getAction(), returnVal))
@@ -481,25 +529,18 @@ bool params::Params::parseArgs(int argc, char** argv)
                 value = "";
             }
             else {
-                if(i + 1 >= argc || !isFlag(std::string(argv[++i]))) {
-                    value = std::string(argv[i]);
-                } else {
-                    std::cerr << "ERROR: Missing argument for '" << option << "'\n";
-                    return false;
+                if(value.empty()) {
+                    if(i + 1 <= argc && !isFlag(std::string(argv[++i]))) {
+                        value = unquote(std::string(argv[i]));
+                    } else {
+                        std::cerr << "ERROR: Missing argument for '" << option << "'\n";
+                        return false;
+                    }
                 }
             }
             if(!_options.at(key).setValue(value)) {
                 std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
                 return false;
-            }
-        }
-        else if (strcmp(argv[i], "-") == 0) {
-            switch (_singleDashBehavior) {
-                case START_POSITIONAL:
-                    return _parsePositionalArgs(i, argc, argv);
-                case ERROR:
-                    usage();
-                    return false;
             }
         }
         else { // we are in positional arguments

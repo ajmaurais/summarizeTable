@@ -7,7 +7,7 @@
 
 #include <iostream>
 
-// #define NO_TRY_CATCH
+#define NO_TRY_CATCH
 #ifndef NO_TRY_CATCH
 #define TRY try {
 #define CATCH \

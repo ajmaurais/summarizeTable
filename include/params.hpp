@@ -18,6 +18,7 @@ namespace params {
                                 bool indentFirstLine);
     bool newWord(char c);
     std::string escapeEscapeCharacters(const std::string&);
+    std::string unquote(std::string);
 
     class Argument {
     public:
@@ -79,18 +80,22 @@ namespace params {
             STORE_TRUE, STORE_FALSE, HELP, VERSION, NONE
         };
     private:
-        std::string _shortOpt;
+        char _shortOpt;
         std::string _longOpt;
         std::string _defaultValue;
         ACTION _action;
         std::string _value;
 
+        void _initialize(char shortOpt, std::string longOpt, std::string help,
+                         Option::TYPE valueType, std::string defaultVal, Option::ACTION action);
         void _checkOptFlags() const;
     public:
         Option() : Argument() {
             _action = ACTION::NONE;
         }
-        Option(std::string shortOpt, std::string longOpt, std::string help,
+        Option(char shortOpt, std::string longOpt, std::string help,
+               TYPE valueType, std::string defaultVal = "", ACTION action = NONE);
+        Option(std::string longOpt, std::string help,
                TYPE valueType, std::string defaultVal = "", ACTION action = NONE);
         Option(const Option&);
         Option& operator = (const Option& rhs);
@@ -110,7 +115,7 @@ namespace params {
             return temp;
         }
 
-        static std::string parseOption(std::string arg);
+        static void parseOption(std::string arg, std::string& option, std::string& value);
     };
 
     class PositionalArgument : public Argument {
@@ -204,13 +209,16 @@ namespace params {
             _singleDashBehavior = ERROR;
             _helpBehavior = EXIT_0;
             _versionBehavior = EXIT_0;
-            if(_help) addOption("h", "help", "Show help and exit.", Option::TYPE::BOOL, "false", Option::ACTION::HELP);
+            if(_help) addOption('h', "help", "Show help and exit.", Option::TYPE::BOOL, "false", Option::ACTION::HELP);
         }
 
-        void addOption(std::string shortOpt, std::string longOpt, std::string help,
+        void addOption(char shortOpt, std::string longOpt, std::string help,
                        Option::TYPE valueType, std::string defaultVal = "",
                        Option::ACTION action = Option::ACTION::NONE);
-        void setVersion(std::string version, std::string shortOpt = "v", std::string longOpt = "version");
+        void addOption(std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal = "",
+                       Option::ACTION action = Option::ACTION::NONE);
+        void setVersion(std::string version, char shortOpt = 'v', std::string longOpt = "version");
         void addArgument(std::string name, std::string help,
                          size_t minArgs = 1, size_t maxArgs = 1,
                          Option::TYPE valueType = Option::TYPE::STRING);
