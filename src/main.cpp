@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <fstream>
 
@@ -10,7 +9,8 @@ int main(int argc, char** argv)
     // Parse command line arguments
     params::Params args("Summarize information in tsv/csv files.");
     args.setSingleDashBehavior(params::Params::START_POSITIONAL);
-    args.addOption('n', "", "Number of lines to look for data types.", params::Option::TYPE::INT, "5");
+    args.addOption('n', "", "Number of lines to look for data types. If reading from stdin, this option is ignored.",
+                   params::Option::TYPE::INT);
     args.addOption('p', "rows", "Number of rows to print.", params::Option::TYPE::INT, "1");
     args.addOption("noHeader", "Don't treat first line as header.",
                    params::Option::BOOL, "false", params::Option::STORE_TRUE);
@@ -23,23 +23,28 @@ int main(int argc, char** argv)
     summarize::TsvFile tsvFile;
     tsvFile.setDelim(args.getOptionValue<char>("sep"));
     bool hasHeader = !args.getOptionValue<bool>("noHeader");
-    int nLines = args.getOptionValue<int>("n");
     if(args.getArgumentCount("file") == 0) {
-        if(!tsvFile.read(std::cin, nLines, hasHeader)) {
+        if(!tsvFile.read(std::cin, hasHeader)) {
             std::cerr << "Could not read table from stdin!\n";
             return 1;
         }
     } else {
         std::ifstream inF(args.getArgumentValue("file"));
-        if(!tsvFile.read(inF, nLines, hasHeader)) {
+        bool success = args.optionIsSet("n") ? tsvFile.read(inF, args.getOptionValue<int>("n"), hasHeader)
+                                             : tsvFile.read(inF, hasHeader);
+        if(!success) {
             std::cerr << "Could not read table from file!\n";
             return 1;
         }
     }
 
     // print summary data
-    if(args.getOptionValue("mode") == "summary") tsvFile.printSummary();
-    else tsvFile.printStructure(args.getOptionValue<int>("rows"));
+    if(args.getOptionValue("mode") == "summary") {
+        tsvFile.printSummary();
+    } else {
+        std::cout << (args.getArgumentCount("file") == 0 ? "stdin" : args.getArgumentValue("file")) << ": ";
+        tsvFile.printStructure(args.getOptionValue<int>("rows"));
+    }
 
     return 0;
 }

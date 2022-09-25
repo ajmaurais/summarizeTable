@@ -16,7 +16,7 @@ bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, b
                 return false;
             }
             if(i > 1) {
-                std::cerr << "WARN: Fewer rows than " << std::to_string(nLines) << std::endl;
+                if(!allLines) std::cerr << "WARN: Fewer rows than " << std::to_string(nLines) << std::endl;
             }
             break;
         }
@@ -70,7 +70,7 @@ void summarize::TsvFile::printSummary() const {
 }
 
 void summarize::TsvFile::printStructure(size_t nRows) const {
-
+    std::cout << nRows << " obs. of " << getNCols() << " variables" << std::endl;
     size_t maxRowI = numDigits(_headers.size());
     size_t maxRowLen = maxLength(_headers);
     for(size_t i = 0; i < _headers.size(); i++) {
