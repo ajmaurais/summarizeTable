@@ -10,6 +10,6 @@ if(RUN_TESTS)
     add_subdirectory(test)
 endif()
 
-add_executable(summarize src/main.cpp src/params.cpp)
+add_executable(summarize src/main.cpp src/params.cpp src/tsvFile.cpp)
 
 target_include_directories(summarize PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
