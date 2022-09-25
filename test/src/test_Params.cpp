@@ -252,7 +252,25 @@ START_TEST("Params")
         // for(int i = 0; i < argCount; i++) std::cout << argArray[i] << std::endl;
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
 
-        // Real program test
+        // test choices
+        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode1", "The mode.", params::Option::INT, "1", {"1", "foo"}))
+        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode2", "The mode.", params::Option::INT, "1", {"1", "2", "2"}))
+        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode3", "The mode.", params::Option::INT, "3", {"1", "2"}))
+        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode4", "The mode.", params::Option::BOOL, "1", {"0", "1"}))
+        args.addOption("mode", "The mode.", params::Option::INT, "1", {"1", "2"});
+        argVector = {std::string(argv[0]), "--mode", "2", "file", "dest"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
+        EXPECT_EQUAL(args.getOptionValue<int>("mode"), 2)
+        argVector = {std::string(argv[0]), "--mode", "3", "file", "dest"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
+        params::Option intChoiceOption("foo", "The mode.", params::Option::INT, "1", {"1", "2"});
+        EXPECT_EQUAL(intChoiceOption.signature(0), "--foo {1, 2}          The mode. '1' is the default.")
+        params::Option charChoiceOption("foo", "The mode.", params::Option::CHAR, "a", {"a", "b", "c"});
+        EXPECT_EQUAL(charChoiceOption.signature(0), "--foo {'a', 'b', 'c'} The mode. 'a' is the default.")
+
+    // Real program test
         params::Params programArgs("Summarize information in tsv/csv files.");
         programArgs.setHelpBehavior(params::Params::RETURN_FALSE);
         programArgs.setSingleDashBehavior(params::Params::START_POSITIONAL);
@@ -261,6 +279,7 @@ START_TEST("Params")
         programArgs.addOption('s', "noHeader", "Don't treat first line as header.",
                        params::Option::BOOL, "false", params::Option::STORE_TRUE);
         programArgs.addOption('F', "sep", "Field separator.", params::Option::CHAR, "\t");
+        programArgs.addOption('m', "mode", "Program output mode.", params::Option::STRING, "str", {"str", "summary"});
         programArgs.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
 
         argVector = {std::string(argv[0]), "--help"};

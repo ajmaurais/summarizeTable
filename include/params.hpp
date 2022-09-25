@@ -2,8 +2,9 @@
 #ifndef PARAMS_HPP
 #define PARAMS_HPP
 
-#include <map>
 #include <vector>
+#include <map>
+#include <set>
 #include <iostream>
 #include <regex>
 #include <filesystem>
@@ -26,6 +27,7 @@ namespace params {
             STRING, CHAR, BOOL, INT, FLOAT
         };
         static std::string typeToStr(TYPE);
+        static bool isNumeric(TYPE);
 
         //! Argument names must begin with a letter and have only alphanumeric characters, dash or underscore after.
         static std::string validArgNamePattern;
@@ -85,18 +87,25 @@ namespace params {
         std::string _defaultValue;
         ACTION _action;
         std::string _value;
+        std::set<std::string> _choices;
 
         void _initialize(char shortOpt, std::string longOpt, std::string help,
-                         Option::TYPE valueType, std::string defaultVal, Option::ACTION action);
+                         Option::TYPE valueType, std::string defaultVal,
+                         const std::vector<std::string>&, Option::ACTION action);
         void _checkOptFlags() const;
     public:
         Option() : Argument() {
             _action = ACTION::NONE;
+            _shortOpt = '\0';
         }
         Option(char shortOpt, std::string longOpt, std::string help,
                TYPE valueType, std::string defaultVal = "", ACTION action = NONE);
+        Option(char shortOpt, std::string longOpt, std::string help,
+               TYPE valueType, std::string defaultVal, const std::vector<std::string>& choices);
         Option(std::string longOpt, std::string help,
                TYPE valueType, std::string defaultVal = "", ACTION action = NONE);
+        Option(std::string longOpt, std::string help,
+               TYPE valueType, std::string defaultVal, const std::vector<std::string>& choices);
         Option(const Option&);
         Option& operator = (const Option& rhs);
 
@@ -200,6 +209,9 @@ namespace params {
         void _validatePositionalArgs() const;
         params::PositionalArgument* _nextArg(size_t&, bool);
         bool _doOptionAction(Option::ACTION, bool&) const;
+        void _addOption(char shortOpt, std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal,
+                       const std::vector<std::string>&, Option::ACTION action);
     public:
         explicit Params(std::string description = "", std::string programName = "", bool help = true) {
             _description = description;
@@ -218,6 +230,12 @@ namespace params {
         void addOption(std::string longOpt, std::string help,
                        Option::TYPE valueType, std::string defaultVal = "",
                        Option::ACTION action = Option::ACTION::NONE);
+        void addOption(char shortOpt, std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal,
+                       const std::vector<std::string>& choices);
+        void addOption(std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal,
+                       const std::vector<std::string>& choices);
         void setVersion(std::string version, char shortOpt = 'v', std::string longOpt = "version");
         void addArgument(std::string name, std::string help,
                          size_t minArgs = 1, size_t maxArgs = 1,

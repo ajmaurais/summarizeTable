@@ -15,6 +15,18 @@ std::string params::Argument::typeToStr(params::Argument::TYPE type) {
     }
 }
 
+bool params::Argument::isNumeric(params::Argument::TYPE type) {
+    switch(type) {
+        case STRING:
+        case CHAR:
+            return false;
+        case BOOL:
+        case INT:
+        case FLOAT:
+            return true;
+    }
+}
+
 //! Use params::VALID_ARG_NAME_REGEX to check if option name is valid
 bool params::Argument::isValidName(std::string name) {
     return std::regex_match(name, std::regex(validArgNamePattern));
@@ -35,7 +47,8 @@ void params::Option::_checkOptFlags() const {
 }
 
 void params::Option::_initialize(char shortOpt, std::string longOpt, std::string help,
-                                 Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
+                                 Option::TYPE valueType, std::string defaultVal,
+                                 const std::vector<std::string>& choices, Option::ACTION action) {
     _shortOpt = shortOpt;
     _longOpt = longOpt;
     _checkOptFlags();
@@ -54,18 +67,41 @@ void params::Option::_initialize(char shortOpt, std::string longOpt, std::string
     // validate default arg if necessary
     if (!defaultVal.empty() && !isValid(defaultVal))
         throw std::invalid_argument(defaultVal + " is an invalid value for TYPE!");
-    _value = defaultVal;
+    if(!choices.empty()) {
+        for(const auto& choice: choices) {
+            if(!isValid(choice))
+                throw std::invalid_argument(choice + " is an invalid value for TYPE!");
+        }
+        if (valueType == BOOL)
+            throw std::invalid_argument("Not able to have choices for TYPE::BOOL");
+        _choices = std::set<std::string>(choices.begin(), choices.end());
+        if (_choices.size() != choices.size())
+            throw std::invalid_argument("Options for option choices must be unique!");
+        if (_choices.find(defaultVal) == _choices.end())
+            throw std::invalid_argument("defaultValue of: '" + defaultVal + "' is not a valid choice!");
+    }
     _defaultValue = defaultVal;
+    _value = defaultVal;
 }
 
 params::Option::Option(char shortOpt, std::string longOpt, std::string help,
                        Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
-    _initialize(shortOpt, longOpt, help, valueType, defaultVal, action);
+    _initialize(shortOpt, longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
+}
+
+params::Option::Option(char shortOpt, std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal, const std::vector<std::string>& choices) {
+    _initialize(shortOpt, longOpt, help, valueType, defaultVal, choices, NONE);
 }
 
 params::Option::Option(std::string longOpt, std::string help,
-                       Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
-    _initialize('\0', longOpt, help, valueType, defaultVal, action);
+                       Option::TYPE valueType, std::string defaultVal, const std::vector<std::string>& choices) {
+    _initialize('\0', longOpt, help, valueType, defaultVal, choices, NONE);
+}
+
+params::Option::Option(std::string longOpt, std::string help,
+                       Option::TYPE valueType, std::string defaultVal, Option::ACTION action){
+    _initialize('\0', longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
 }
 
 params::Argument::Argument() {
@@ -97,26 +133,13 @@ params::Option::Option(const Option& rhs) : Argument(rhs) {
     _shortOpt = rhs._shortOpt;
     _longOpt = rhs._longOpt;
     _defaultValue = rhs._defaultValue;
+    _choices = rhs._choices;
     _action = rhs._action;
 }
 
-params::Argument& params::Argument::operator = (const params::Argument& rhs) {
-    _name = rhs._name;
-    _help = rhs._help;
-    _valueType = rhs._valueType;
-    _isSet = rhs._isSet;
-    return *this;
-}
+params::Argument& params::Argument::operator = (const params::Argument& rhs) = default;
 
-params::Option& params::Option::operator = (const params::Option& rhs) {
-    Argument::operator=(rhs);
-    _value = rhs._value;
-    _shortOpt = rhs._shortOpt;
-    _longOpt = rhs._longOpt;
-    _defaultValue = rhs._defaultValue;
-    _action = rhs._action;
-    return *this;
-}
+params::Option& params::Option::operator = (const params::Option& rhs) = default;
 
 bool params::Option::isValid(std::string value) const {
     if(_valueType != TYPE::BOOL && _action != ACTION::NONE)
@@ -142,6 +165,8 @@ bool params::Argument::isValid(std::string value) const {
 
 bool params::Option::isValid() const {
     if(_valueType != TYPE::BOOL && _action != ACTION::NONE) return false;
+    if(!_choices.empty() && _choices.find(_value) == _choices.end())
+        return false;
     if(_value.empty()) return true;
     return isValid(_value);
 }
@@ -285,8 +310,26 @@ std::string params::Argument::signature(std::string ret, int margin) const {
 
 std::string params::Option::signature(int margin) const {
     std::string ret;
-    std::string name = (_action == ACTION::NONE ? _name : "");
-    std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+    std::string name;
+    if(_action != ACTION::NONE) {
+        name = "";
+    }
+    else if(!_choices.empty()) {
+        std::string quote = isNumeric(_valueType) ? "" : "'";
+        // char quote = isNumeric(_valueType) ? '\0' : '\'';
+        name = "{" + quote;
+        int i = 0;
+        for(const auto& choice: _choices) {
+            if(i > 0) name += ", " + quote;
+            name += choice + quote;
+            i++;
+        }
+        name += "}";
+    }
+    else {
+        name = _name;
+        std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+    }
     if(_shortOpt != '\0') {
         ret += "-" + std::string(1, _shortOpt) + (name.empty() ? "" : ' ' + name);
         if(!_longOpt.empty()) ret += ", ";
@@ -305,10 +348,12 @@ std::string params::Argument::multiLineString(std::string addStr, size_t margin,
     return params::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
 }
 
-void params::Params::addOption(char shortOpt, std::string longOpt, std::string help,
+void params::Params::_addOption(char shortOpt, std::string longOpt, std::string help,
                                params::Option::TYPE valueType, std::string defaultVal,
-                               params::Option::ACTION action) {
-    params::Option option(shortOpt, longOpt, help, valueType, defaultVal, action);
+                               const std::vector<std::string>& choices, params::Option::ACTION action)
+{
+    params::Option option = (choices.empty() ? params::Option(shortOpt, longOpt, help, valueType, defaultVal, action):
+                                               params::Option(shortOpt, longOpt, help, valueType, defaultVal, choices));
     std::string name = option.getName();
     _options[name] = option;
     _optionOrder.push_back(name);
@@ -324,11 +369,28 @@ void params::Params::addOption(char shortOpt, std::string longOpt, std::string h
     }
 }
 
+void params::Params::addOption(char shortOpt, std::string longOpt, std::string help,
+                               params::Option::TYPE valueType, std::string defaultVal,
+                               params::Option::ACTION action) {
+    _addOption(shortOpt, longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
+}
+
 void params::Params::addOption(std::string longOpt, std::string help,
                                params::Option::TYPE valueType, std::string defaultVal,
                                params::Option::ACTION action) {
-    addOption('\0', longOpt, help, valueType, defaultVal, action);
+    _addOption('\0', longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
 }
+
+void params::Params::addOption(char shortOpt, std::string longOpt, std::string help, params::Argument::TYPE valueType,
+                               std::string defaultVal, const std::vector<std::string>& choices) {
+    _addOption(shortOpt, longOpt, help, valueType, defaultVal, choices, Option::NONE);
+}
+
+void params::Params::addOption(std::string longOpt, std::string help, params::Argument::TYPE valueType,
+                               std::string defaultVal, const std::vector<std::string>& choices) {
+    _addOption('\0', longOpt, help, valueType, defaultVal, choices, Option::NONE);
+}
+
 
 //! Set program version and add version option flag;
 void params::Params::setVersion(std::string version, char shortOpt, std::string longOpt) {
