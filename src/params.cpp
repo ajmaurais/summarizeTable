@@ -577,9 +577,9 @@ bool params::Params::parseArgs(int argc, char** argv)
                 return false;
             }
 
-            std::string key, value;
-            Option::parseOption(option, key, value);
-            key = _optionKeys.at(key);
+            std::string flag, value;
+            Option::parseOption(option, flag, value);
+            std::string key = _optionKeys.at(flag);
             if(_options.at(key).getAction() == Option::HELP || _options.at(key).getAction() == Option::VERSION) {
                 bool returnVal;
                 if(_doOptionAction(_options.at(key).getAction(), returnVal))
@@ -587,7 +587,8 @@ bool params::Params::parseArgs(int argc, char** argv)
             }
 
             if(_options.at(key).getType() == Option::TYPE::BOOL &&
-               _options.at(key).getAction() != Option::ACTION::NONE) {
+               _options.at(key).getAction() != Option::ACTION::NONE &&
+               value.empty()) {
                 value = "";
             }
             else {
@@ -601,7 +602,7 @@ bool params::Params::parseArgs(int argc, char** argv)
                 }
             }
             if(!_options.at(key).setValue(value)) {
-                std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << option << "'\n";
+                std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << flag << "'\n";
                 return false;
             }
         }

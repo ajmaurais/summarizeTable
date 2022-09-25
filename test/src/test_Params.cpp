@@ -270,7 +270,7 @@ START_TEST("Params")
         params::Option charChoiceOption("foo", "The mode.", params::Option::CHAR, "a", {"a", "b", "c"});
         EXPECT_EQUAL(charChoiceOption.signature(0), "--foo {'a', 'b', 'c'} The mode. 'a' is the default.")
 
-    // Real program test
+        // Real program test
         params::Params programArgs("Summarize information in tsv/csv files.");
         programArgs.setHelpBehavior(params::Params::RETURN_FALSE);
         programArgs.setSingleDashBehavior(params::Params::START_POSITIONAL);
