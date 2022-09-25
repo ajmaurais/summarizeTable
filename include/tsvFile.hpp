@@ -14,6 +14,17 @@ namespace summarize {
 
     std::istream& safeGetLine(std::istream& is, std::string& s);
     void split(const std::string& s, char delim, std::vector<std::string>& elems);
+    size_t maxLength(std::vector<std::string>);
+    template <typename T> size_t numDigits(T unsignedInteger) {
+        int digits = 0;
+        do {
+            unsignedInteger /= 10;
+            digits++;
+        } while (unsignedInteger);
+        return digits;
+    }
+
+    class DataType;
 
     class TsvFile {
     private:

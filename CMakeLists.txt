@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(summarize)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 
 option(RUN_TESTS "Run unit tests?" ON)
 if(RUN_TESTS)
