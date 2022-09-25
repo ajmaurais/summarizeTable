@@ -4,13 +4,12 @@
 
 #include <tsvFile.hpp>
 
-bool summarize::TsvFile::read(std::istream& is, size_t nLines, bool hasHeader)
-{
+bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, bool hasHeader) {
     std::string line;
     std::vector<std::vector<std::string> > data;
     size_t largestRow = 0;
     for(size_t i = 0;; i++) {
-        if(!_allLines && i >= nLines) break;
+        if(!allLines && i >= nLines) break;
         if (!safeGetLine(is, line)) {
             if(i == 0) {
                 std::cerr << "ERROR: no data in input!" << std::endl;
@@ -23,11 +22,13 @@ bool summarize::TsvFile::read(std::istream& is, size_t nLines, bool hasHeader)
         }
 
         data.emplace_back();
+        _nRows++;
         split(line, _delim, data.back());
         largestRow = std::max(largestRow, data.back().size());
     }
 
     if(hasHeader) {
+        _nRows--;
         for(size_t i = 0; i < largestRow; i++) {
             if(data[0].size() > i)
                 _headers.push_back(data[0].at(i));
@@ -54,6 +55,40 @@ bool summarize::TsvFile::read(std::istream& is, size_t nLines, bool hasHeader)
     }
 
     return true;
+}
+
+bool summarize::TsvFile::read(std::istream& is, size_t nLines, bool hasHeader) {
+    return _read(is, nLines, false, hasHeader);
+}
+
+bool summarize::TsvFile::read(std::istream& is, bool hasHeader) {
+    return _read(is, 0, true, hasHeader);
+}
+
+void summarize::TsvFile::printSummary() const {
+    throw std::runtime_error("Not implemented!");
+}
+
+void summarize::TsvFile::printStructure(size_t nRows) const {
+
+    size_t maxRowI = numDigits(_headers.size());
+    size_t maxRowLen = maxLength(_headers);
+    for(size_t i = 0; i < _headers.size(); i++) {
+        size_t indent = maxRowI - numDigits(i);
+        std::cout << std::string(indent, ' ') << std::to_string(i) << ") " << _headers[i]
+                  << std::string(maxRowLen - _headers.at(i).size(), ' ') + ':';
+        // TODO: add data type here!
+        size_t printRows = std::min(nRows, _nRows);
+        for (size_t row = 0; row < printRows; row++)
+            std::cout << ' ' << _data.at(i).at(row);
+        std::cout << " ...\n";
+    }
+}
+
+size_t summarize::maxLength(std::vector<std::string> strings) {
+    size_t ret = 0;
+    for(const auto& s: strings) ret = std::max(ret, s.size());
+    return ret;
 }
 
 /**

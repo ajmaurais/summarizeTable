@@ -32,27 +32,30 @@ namespace summarize {
         std::map<std::string, size_t> _headerMap;
         std::vector<std::vector<std::string> > _data;
         std::vector<std::string> _dataTypes;
-        size_t _nLines;
-        size_t _nCols;
+        //! Actual number of rows in _data
+        size_t _nRows;
         char _delim;
-        bool _allLines;
 
+        bool _read(std::istream&, size_t, bool, bool = true);
     public:
-        TsvFile() {
-            _delim = '\t';
-            _nLines = 0;
-            _nCols = 0;
+        explicit TsvFile(char delim = '\t') {
+            _delim = delim;
+            _nRows = 0;
         }
 
         void setDelim(char delim) {
             _delim = delim;
         }
         bool read(std::istream&, size_t, bool = true);
+        bool read(std::istream&, bool = true);
+
+        void printSummary() const;
+        void printStructure(size_t nRows = 1) const;
         size_t getNRows() const {
-            return _nLines;
+            return _nRows;
         }
         size_t getNCols() const {
-            return _nCols;
+            return _headers.size();
         }
     };
 }

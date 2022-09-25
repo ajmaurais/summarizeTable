@@ -15,9 +15,11 @@ int main(int argc, char** argv)
     args.addOption("noHeader", "Don't treat first line as header.",
                    params::Option::BOOL, "false", params::Option::STORE_TRUE);
     args.addOption('F', "sep", "Field separator.", params::Option::CHAR, "\t");
+    args.addOption('m', "mode", "Program output mode.", params::Option::STRING, "str", {"str", "summary"});
     args.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
     args.parseArgs(argc, argv);
 
+    // read data
     summarize::TsvFile tsvFile;
     tsvFile.setDelim(args.getOptionValue<char>("sep"));
     bool hasHeader = !args.getOptionValue<bool>("noHeader");
@@ -34,6 +36,10 @@ int main(int argc, char** argv)
             return 1;
         }
     }
+
+    // print summary data
+    if(args.getOptionValue("mode") == "summary") tsvFile.printSummary();
+    else tsvFile.printStructure(args.getOptionValue<int>("rows"));
 
     return 0;
 }
