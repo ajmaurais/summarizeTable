@@ -24,14 +24,17 @@ namespace summarize {
         return digits;
     }
 
-    class DataType;
-
     class TsvFile {
+    public:
+        enum TYPE {
+            STRING, INT, BOOL, FLOAT, Last, First = STRING
+        };
+        std::string typeToString;
     private:
         std::vector<std::string> _headers;
         std::map<std::string, size_t> _headerMap;
         std::vector<std::vector<std::string> > _data;
-        std::vector<std::string> _dataTypes;
+        std::vector<TYPE> _dataTypes;
         //! Actual number of rows in _data
         size_t _nRows;
         char _delim;
