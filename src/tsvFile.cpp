@@ -70,7 +70,7 @@ void summarize::TsvFile::printSummary() const {
 }
 
 void summarize::TsvFile::printStructure(size_t nRows) const {
-    std::cout << nRows << " obs. of " << getNCols() << " variables" << std::endl;
+    std::cout << _nRows << " obs. of " << getNCols() << " variables" << std::endl;
     size_t maxRowI = numDigits(_headers.size());
     size_t maxRowLen = maxLength(_headers);
     for(size_t i = 0; i < _headers.size(); i++) {

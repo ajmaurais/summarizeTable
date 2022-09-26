@@ -17,7 +17,8 @@ int main(int argc, char** argv)
     args.addOption('F', "sep", "Field separator.", params::Option::CHAR, "\t");
     args.addOption('m', "mode", "Program output mode.", params::Option::STRING, "str", {"str", "summary"});
     args.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
-    args.parseArgs(argc, argv);
+    if(!args.parseArgs(argc, argv))
+        return 1;
 
     // read data
     summarize::TsvFile tsvFile;
