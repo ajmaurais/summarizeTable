@@ -5,6 +5,85 @@ std::string params::Argument::validArgNamePattern = "^([a-zA-Z][a-zA-Z0-9_\\-]+|
 size_t params::Argument::maxLineLen = params::MAX_LINE_LEN;
 size_t params::Argument::indendentLen = params::INDENT_LEN;
 
+std::string params::ArgumentValue::valueTypeToStr(params::ArgumentValue::VALUE_TYPE type) {
+    switch(type) {
+        case STRING: return "std::string";
+        case CHAR: return "char";
+        case DOUBLE: return "double";
+        case LONG: return "long";
+        case SIZE_T: return "size_t";
+        case BOOL: return "bool";
+        case INT: return "int";
+        case FLOAT: return "float";
+        default: throw std::runtime_error("Variant index undefined!");
+    }
+}
+
+std::string params::ArgumentValue::valueTypeStr() const {
+    return valueTypeToStr(VALUE_TYPE(_value.index()));
+}
+
+void params::ArgumentValue::setValue(std::string value) {
+    if(!isValid(value)) throw std::invalid_argument("'" + value + "' Can not be converted to");
+    switch(_value.index()) {
+        case VALUE_TYPE::BOOL: _setValue<bool>(value); return;
+        case VALUE_TYPE::INT: _setValue<int>(value); return;
+        case VALUE_TYPE::LONG: _setValue<long>(value); return;
+        case VALUE_TYPE::SIZE_T: _setValue<size_t>(value); return;
+        case VALUE_TYPE::FLOAT: _setValue<float>(value); return;
+        case VALUE_TYPE::DOUBLE: _setValue<double>(value); return;
+        case VALUE_TYPE::CHAR: _setValue<char>(value); return;
+        case VALUE_TYPE::STRING: setValue<std::string>(value); return;
+        default: throw std::runtime_error("Variant index undefined!");
+    }
+}
+
+std::string params::ArgumentValue::str() const {
+    switch(_value.index()) {
+        case BOOL: return (std::get<bool>(_value) ? "true" : "false");
+        case INT: return std::to_string(std::get<int>(_value));
+        case LONG: return std::to_string(std::get<long>(_value));
+        case SIZE_T: return std::to_string(std::get<size_t>(_value));
+        case FLOAT: return std::to_string(std::get<float>(_value));
+        case DOUBLE: return std::to_string(std::get<double>(_value));
+        case CHAR: return std::string(1, std::get<char>(_value));
+        case STRING: return std::get<std::string>(_value);
+        default: throw std::runtime_error("Variant index undefined!");
+    }
+}
+
+void params::ArgumentValue::toType(bool& lhs, const std::string& rhs) {
+    std::string temp = rhs;
+    std::transform(temp.begin(), temp.end(), temp.begin(), ::tolower);
+    if(temp == "true") lhs = true;
+    else if(temp == "false") lhs = false;
+    else lhs = bool(std::stoi(rhs));
+}
+
+void params::ArgumentValue::toType(int& lhs, const std::string& rhs) {
+    lhs = std::stoi(rhs);
+}
+
+void params::ArgumentValue::toType(long& lhs, const std::string& rhs) {
+    lhs = std::stol(rhs);
+}
+
+void params::ArgumentValue::toType(size_t& lhs, const std::string& rhs) {
+    lhs = std::stoul(rhs);
+}
+
+void params::ArgumentValue::toType(float& lhs, const std::string& rhs) {
+    lhs = std::stof(rhs);
+}
+
+void params::ArgumentValue::toType(double& lhs, const std::string& rhs) {
+    lhs = std::stod(rhs);
+}
+
+void params::ArgumentValue::toType(char& lhs, const std::string& rhs) {
+    lhs = rhs[0];
+}
+
 std::string params::Argument::typeToStr(params::Argument::TYPE type) {
     switch(type) {
         case STRING: return "std::string";
@@ -46,80 +125,39 @@ void params::Option::_checkOptFlags() const {
         throw std::invalid_argument("Long or short option flag contain invalid characters!");
 }
 
-void params::Option::_initialize(char shortOpt, std::string longOpt, std::string help,
-                                 Option::TYPE valueType, std::string defaultVal,
-                                 const std::vector<std::string>& choices, Option::ACTION action) {
-    _shortOpt = shortOpt;
-    _longOpt = longOpt;
-    _checkOptFlags();
-    _name = _longOpt.empty() ? std::string(1, _shortOpt) : _longOpt;
-    _help = help;
-    _isSet = false;
-    _valueType = valueType;
+// template<typename T>
+// params::Option::Option(char shortOpt, std::string longOpt, std::string help,
+//                        T defaultVal, Option::ACTION action) {
+//     _initialize<T>(shortOpt, longOpt, help, defaultVal, std::vector<std::string>(), action);
+// }
+//
+// template<typename T>
+// params::Option::Option(char shortOpt, std::string longOpt, std::string help,
+//                        T defaultVal, const std::vector<std::string>& choices) {
+//     _initialize<T>(shortOpt, longOpt, help, defaultVal, choices, NONE);
+// }
+//
+// template<typename T>
+// params::Option::Option(std::string longOpt, std::string help,
+//                        T defaultVal, const std::vector<std::string>& choices) {
+//     _initialize<T>('\0', longOpt, help, defaultVal, choices, NONE);
+// }
 
-    _action = action;
-    if(_action != ACTION::NONE && !defaultVal.empty()) {
-        if(_action == ACTION::STORE_TRUE) _value = "false";
-        if(_action == ACTION::STORE_FALSE) _value = "true";
-    }
-    if(!isValid()) throw std::invalid_argument("Invalid option!");
-
-    // validate default arg if necessary
-    if (!defaultVal.empty() && !isValid(defaultVal))
-        throw std::invalid_argument(defaultVal + " is an invalid value for TYPE!");
-    if(!choices.empty()) {
-        for(const auto& choice: choices) {
-            if(!isValid(choice))
-                throw std::invalid_argument(choice + " is an invalid value for TYPE!");
-        }
-        if (valueType == BOOL)
-            throw std::invalid_argument("Not able to have choices for TYPE::BOOL");
-        _choices = std::set<std::string>(choices.begin(), choices.end());
-        if (_choices.size() != choices.size())
-            throw std::invalid_argument("Options for option choices must be unique!");
-        if (_choices.find(defaultVal) == _choices.end())
-            throw std::invalid_argument("defaultValue of: '" + defaultVal + "' is not a valid choice!");
-    }
-    _defaultValue = defaultVal;
-    _value = defaultVal;
-}
-
-params::Option::Option(char shortOpt, std::string longOpt, std::string help,
-                       Option::TYPE valueType, std::string defaultVal, Option::ACTION action) {
-    _initialize(shortOpt, longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
-}
-
-params::Option::Option(char shortOpt, std::string longOpt, std::string help,
-                       Option::TYPE valueType, std::string defaultVal, const std::vector<std::string>& choices) {
-    _initialize(shortOpt, longOpt, help, valueType, defaultVal, choices, NONE);
-}
-
-params::Option::Option(std::string longOpt, std::string help,
-                       Option::TYPE valueType, std::string defaultVal, const std::vector<std::string>& choices) {
-    _initialize('\0', longOpt, help, valueType, defaultVal, choices, NONE);
-}
-
-params::Option::Option(std::string longOpt, std::string help,
-                       Option::TYPE valueType, std::string defaultVal, Option::ACTION action){
-    _initialize('\0', longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
-}
+// template <>
+// params::Option::Option(std::string longOpt, std::string help,
+//                        bool defaultVal, Option::ACTION action){
+//     _initialize<bool>('\0', longOpt, help, defaultVal, std::vector<bool>(), action);
+// }
 
 params::Argument::Argument() {
     _isSet = false;
     _valueType = TYPE::STRING;
 }
 
-params::PositionalArgument::PositionalArgument(std::string name, std::string help,
-                                               size_t minValues, size_t maxValues,
-                                               Argument::TYPE valueType) : Argument() {
-    _name = name;
-    _checkValidName();
-    _help = help;
-    _valueType = valueType;
-    _minValues = minValues;
-    if(maxValues < 1) throw std::invalid_argument("Can not have less than 1 maxValue for PositionalArgument");
-    _maxValues = maxValues;
-}
+// params::PositionalArgument::PositionalArgument(std::string name, std::string help,
+//                                                size_t minValues, size_t maxValues,
+//                                                Argument::TYPE valueType) : Argument() {
+// }
 
 params::Argument::Argument(const params::Argument& rhs) {
     _name = rhs._name;
@@ -141,23 +179,17 @@ params::Argument& params::Argument::operator = (const params::Argument& rhs) = d
 
 params::Option& params::Option::operator = (const params::Option& rhs) = default;
 
-bool params::Option::isValid(std::string value) const {
-    if(_valueType != TYPE::BOOL && _action != ACTION::NONE)
-        return false; // Has to be NONE unless _valueType is BOOL.
-    return Argument::isValid(value);
-}
-
 //! Check if \p value can be converted into \p params::Argument::valueType.
-bool params::Argument::isValid(std::string value) const {
-    if(_valueType == TYPE::STRING) return true; // it's already a string so it's valid.
-    if(_valueType == TYPE::CHAR) return value.size() == 1;
-    if(_valueType == TYPE::BOOL) {
+bool params::ArgumentValue::isValid(const std::string& value) const {
+    if(_value.index() == VALUE_TYPE::STRING) return true; // it's already a string so it's valid.
+    if(_value.index() == VALUE_TYPE::CHAR) return value.size() == 1;
+    if(_value.index() == VALUE_TYPE::BOOL) {
         return std::regex_match(value, std::regex("^(true|false|0|1)$", std::regex_constants::icase));
     }
-    if(_valueType == TYPE::INT) {
+    if(_value.index() == VALUE_TYPE::INT) {
         return std::regex_match(value, std::regex("^-?[0-9]+$"));
     }
-    if(_valueType == TYPE::FLOAT) {
+    if(_value.index() == VALUE_TYPE::FLOAT) {
         return std::regex_match(value, std::regex("^-?[0-9]+(\\.[0-9]*)?$"));
     }
     return false;
@@ -167,17 +199,16 @@ bool params::Option::isValid() const {
     if(_valueType != TYPE::BOOL && _action != ACTION::NONE) return false;
     if(!_choices.empty() && _choices.find(_value) == _choices.end())
         return false;
-    if(_value.empty()) return true;
-    return isValid(_value);
+    return true;
 }
 
 bool params::PositionalArgument::isValid () const {
     if(getArgCount() < _minValues || getArgCount() > _maxValues)
         return false;
-    for(const auto& value: _values) {
-        if (!Argument::isValid(value))
-            return false;
-    }
+    // for(const auto& value: _values) {
+    //     if (!Argument::isValid(value))
+    //         return false;
+    // }
     return true;
 }
 
@@ -186,23 +217,23 @@ std::string params::PositionalArgument::invalidReason() const {
         return "Not enough arguments given!";
     if(getArgCount() > _maxValues)
         return "Too many arguments given!";
-    for(const auto& value: _values) {
-        if (!Argument::isValid(value))
-            return "No viable conversion of " + value + " to " + typeToStr(_valueType);
-    }
+    // for(const auto& value: _values) {
+    //     if (!value.isValid())
+    //         return "No viable conversion of " + value + " to " + typeToStr(_valueType);
+    // }
     return "";
 }
 
 bool params::Option::setValue(std::string value) {
     if(_valueType == TYPE::BOOL && _action != ACTION::NONE){
         if(!value.empty()) return false;
-        if(_action == ACTION::STORE_TRUE) _value = "true";
-        if(_action == ACTION::STORE_FALSE) _value = "false";
-        if(_action == ACTION::HELP) _value = "true";
-        if(_action == ACTION::VERSION) _value = "true";
+        if(_action == ACTION::STORE_TRUE) _value.setValue<bool>(true);
+        if(_action == ACTION::STORE_FALSE) _value.setValue<bool>(false);
+        if(_action == ACTION::HELP) _value.setValue<bool>(true);
+        if(_action == ACTION::VERSION) _value.setValue<bool>(true);
     }
     else {
-        _value = value;
+        _value.setValue(value);
     }
     if(isValid()) {
         _isSet = true;
@@ -216,15 +247,15 @@ void params::Option::unsetValue() {
     _value = _defaultValue;
 }
 
-bool params::PositionalArgument::addValue(std::string value) {
-    _values.push_back(value);
-
-    if(Argument::isValid(value)) {
-        _isSet = true;
-        return true;
-    }
-    return false;
-}
+// bool params::PositionalArgument::addValue(std::string value) {
+//     if(_values.back().isValid(value)) {
+//         _isSet = true;
+//         return true;
+//     }
+//     _values.emplace_back();
+//     _values.back().setValue<std::string>(value);
+//     return false;
+// }
 
 void params::PositionalArgument::unsetValues() {
     _isSet = false;
@@ -288,8 +319,8 @@ std::string params::escapeEscapeCharacters(const std::string& s) {
 std::string params::Option::help() const {
     std::string ret = Argument::help();
     // if(_valueType == TYPE::BOOL && _action != ACTION::NONE)
-    if(!_defaultValue.empty() && _action == ACTION::NONE) {
-        ret += " '" + escapeEscapeCharacters(_defaultValue) + "' is the default.";
+    if(_defaultValue.isSet() && _action == ACTION::NONE) {
+        ret += " '" + escapeEscapeCharacters(_defaultValue.str()) + "' is the default.";
     }
     return ret;
 }
@@ -321,7 +352,7 @@ std::string params::Option::signature(int margin) const {
         int i = 0;
         for(const auto& choice: _choices) {
             if(i > 0) name += ", " + quote;
-            name += choice + quote;
+            name += choice.str() + quote;
             i++;
         }
         name += "}";
@@ -348,64 +379,61 @@ std::string params::Argument::multiLineString(std::string addStr, size_t margin,
     return params::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
 }
 
-void params::Params::_addOption(char shortOpt, std::string longOpt, std::string help,
-                               params::Option::TYPE valueType, std::string defaultVal,
-                               const std::vector<std::string>& choices, params::Option::ACTION action)
-{
-    params::Option option = (choices.empty() ? params::Option(shortOpt, longOpt, help, valueType, defaultVal, action):
-                                               params::Option(shortOpt, longOpt, help, valueType, defaultVal, choices));
-    std::string name = option.getName();
-    _options[name] = option;
-    _optionOrder.push_back(name);
+// void params::Params::_addOption(char shortOpt, std::string longOpt, std::string help,
+//                                params::Option::TYPE valueType, std::string defaultVal,
+//                                const std::vector<std::string>& choices, params::Option::ACTION action)
+// {
+//     params::Option option = (choices.empty() ? params::Option(shortOpt, longOpt, help, valueType, defaultVal, action):
+//                                                params::Option(shortOpt, longOpt, help, valueType, defaultVal, choices));
+//     std::string name = option.getName();
+//     _options[name] = option;
+//     _optionOrder.push_back(name);
+//
+//     // add option to _optionKeys map
+//     std::string flags[2] = {(shortOpt == '\0' ? "" : std::string(1, shortOpt)), longOpt};
+//     for(auto & flag : flags) {
+//         if (!flag.empty()) {
+//             if(_optionKeys.find(flag) != _optionKeys.end())
+//                 throw std::runtime_error("'" + flag + "' already exists as an option!");
+//             _optionKeys[flag] = name;
+//         }
+//     }
+// }
 
-    // add option to _optionKeys map
-    std::string flags[2] = {(shortOpt == '\0' ? "" : std::string(1, shortOpt)), longOpt};
-    for(auto & flag : flags) {
-        if (!flag.empty()) {
-            if(_optionKeys.find(flag) != _optionKeys.end())
-                throw std::runtime_error("'" + flag + "' already exists as an option!");
-            _optionKeys[flag] = name;
-        }
-    }
-}
+// void params::Params::addOption(char shortOpt, std::string longOpt, std::string help,
+//                                bool defaultVal, params::Option::ACTION action) {
+//     _addOption<bool>(shortOpt, longOpt, help, defaultVal, std::vector<bool>(), action);
+// }
+//
+// void params::Params::addOption(std::string longOpt, std::string help,
+//                                bool defaultVal, params::Option::ACTION action) {
+//     _addOption<bool>('\0', longOpt, help, defaultVal, std::vector<bool>(), action);
+// }
 
-void params::Params::addOption(char shortOpt, std::string longOpt, std::string help,
-                               params::Option::TYPE valueType, std::string defaultVal,
-                               params::Option::ACTION action) {
-    _addOption(shortOpt, longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
-}
-
-void params::Params::addOption(std::string longOpt, std::string help,
-                               params::Option::TYPE valueType, std::string defaultVal,
-                               params::Option::ACTION action) {
-    _addOption('\0', longOpt, help, valueType, defaultVal, std::vector<std::string>(), action);
-}
-
-void params::Params::addOption(char shortOpt, std::string longOpt, std::string help, params::Argument::TYPE valueType,
-                               std::string defaultVal, const std::vector<std::string>& choices) {
-    _addOption(shortOpt, longOpt, help, valueType, defaultVal, choices, Option::NONE);
-}
-
-void params::Params::addOption(std::string longOpt, std::string help, params::Argument::TYPE valueType,
-                               std::string defaultVal, const std::vector<std::string>& choices) {
-    _addOption('\0', longOpt, help, valueType, defaultVal, choices, Option::NONE);
-}
+// void params::Params::addOption(char shortOpt, std::string longOpt, std::string help, params::Argument::TYPE valueType,
+//                                std::string defaultVal, const std::vector<std::string>& choices) {
+//     _addOption(shortOpt, longOpt, help, valueType, defaultVal, choices, Option::NONE);
+// }
+//
+// void params::Params::addOption(std::string longOpt, std::string help, params::Argument::TYPE valueType,
+//                                std::string defaultVal, const std::vector<std::string>& choices) {
+//     _addOption('\0', longOpt, help, valueType, defaultVal, choices, Option::NONE);
+// }
 
 
 //! Set program version and add version option flag;
 void params::Params::setVersion(std::string version, char shortOpt, std::string longOpt) {
     _version = version;
-    addOption(shortOpt, longOpt, "Print version and exit", Option::TYPE::BOOL, "false", Option::ACTION::VERSION);
+    addOption<bool>(shortOpt, longOpt, "Print version and exit", false, Option::ACTION::VERSION);
 }
 
-void params::Params::addArgument(std::string name, std::string help,
-                                 size_t minArgs, size_t maxArgs,
-                                 params::Option::TYPE valueType) {
-    if(_args.find(name) != _args.end())
-        throw std::runtime_error("'" + name + "' is already a positional argument");
-    _args[name] = params::PositionalArgument(name, help, minArgs, maxArgs, valueType);
-    _argOrder.push_back(name);
-}
+// void params::Params::addArgument(std::string name, std::string help,
+//                                  size_t minArgs, size_t maxArgs) {
+//     if(_args.find(name) != _args.end())
+//         throw std::runtime_error("'" + name + "' is already a positional argument");
+//     _args[name] = params::PositionalArgument(name, help, minArgs, maxArgs, valueType);
+//     _argOrder.push_back(name);
+// }
 
 /**
  * Determine whether \p arg is an option in _options
@@ -613,33 +641,38 @@ bool params::Params::parseArgs(int argc, char** argv)
     return true;
 }
 
-void params::Argument::toType(const std::string& value, char& dest) const {
-    if(_valueType != CHAR) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
-    dest = value[0];
-}
+// void params::Argument::toType(const std::string& value, char& dest) const {
+//     if(_valueType != CHAR) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
+//     dest = value[0];
+// }
+//
+// void params::Argument::toType(const std::string& value, bool& dest) const {
+//     if(_valueType != BOOL) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
+//     std::string temp = value;
+//     std::transform(temp.begin(), temp.end(), temp.begin(), ::tolower);
+//     if(temp == "true") dest = true;
+//     else if(temp == "false") dest = false;
+//     else dest = bool(std::stoi(value));
+// }
+//
+// void params::Argument::toType(const std::string& value, int& dest) const {
+//     if(_valueType != INT) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
+//     dest = std::stoi(value);
+// }
+//
+// void params::Argument::toType(const std::string& value, float& dest) const {
+//     if(_valueType != FLOAT) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
+//     dest = std::stof(value);
+// }
 
-void params::Argument::toType(const std::string& value, bool& dest) const {
-    if(_valueType != BOOL) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
-    std::string temp = value;
-    std::transform(temp.begin(), temp.end(), temp.begin(), ::tolower);
-    if(temp == "true") dest = true;
-    else if(temp == "false") dest = false;
-    else dest = bool(std::stoi(value));
-}
+// template<typename T> constexpr
+// params::Argument::TYPE params::Argument::typeOfValue(T v) {
+//     if(std::is_integral<T>
+// }
 
-void params::Argument::toType(const std::string& value, int& dest) const {
-    if(_valueType != INT) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
-    dest = std::stoi(value);
-}
-
-void params::Argument::toType(const std::string& value, float& dest) const {
-    if(_valueType != FLOAT) throw std::runtime_error("Converting " + typeToStr(_valueType) + " is undefined!");
-    dest = std::stof(value);
-}
-
-std::vector<std::string> params::Params::getArgumentValues(std::string argName) const {
-    return _args.at(argName).getValues();
-}
+// std::vector<std::string> params::Params::getArgumentValues(std::string argName) const {
+//     return _args.at(argName).getValues();
+// }
 
 /**
  * Return a single argument for PositionalArguments that can only have a single value.
@@ -652,7 +685,7 @@ std::string params::PositionalArgument::getValue() const {
         throw std::runtime_error("Calls to this function are invalid when there are more than 1 values for argument!");
     if (getArgCount() != 1)
         throw std::out_of_range("'" + _name + "' is empty!");
-    return _values[0];
+    return _values[0].getValue();
 }
 
 //! Number of args given for \p argName on the command line.
@@ -672,9 +705,9 @@ void params::Params::clearArgs() {
         it->second.unsetValues();
 }
 
-std::vector<std::string> params::PositionalArgument::getValues() const {
-    return _values;
-}
+// std::vector<std::string> params::PositionalArgument::getValues() const {
+//     return _values;
+// }
 
 bool params::newWord(char c) {
     return c == ' ';

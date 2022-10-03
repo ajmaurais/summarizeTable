@@ -10,21 +10,19 @@ int main(int argc, char** argv)
     // Parse command line arguments
     params::Params args("Summarize information in tsv/csv files.");
     args.setSingleDashBehavior(params::Params::START_POSITIONAL);
-    args.addOption('n', "", "Number of lines to look for data types. If reading from stdin, this option is ignored.",
-                   params::Option::TYPE::INT);
-    args.addOption('p', "rows", "Number of rows to print.", params::Option::TYPE::INT, "1");
-    args.addOption("noHeader", "Don't treat first line as header.",
-                   params::Option::BOOL, "false", params::Option::STORE_TRUE);
-    args.addOption('F', "sep", "Field separator.", params::Option::CHAR, "\t");
-    args.addOption('m', "mode", "Program output mode.", params::Option::STRING, "str", {"str", "summary"});
-    args.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
+    args.addOption<int>('n', "", "Number of lines to look for data types. If reading from stdin, this option is ignored.");
+    args.addOption<int>('p', "rows", "Number of rows to print.", 1);
+    args.addOption<bool>("noHeader", "Don't treat first line as header.", false, params::Option::STORE_TRUE);
+    args.addOption<char>('F', "sep", "Field separator.", '\t');
+    args.addOption<std::string>('m', "mode", "Program output mode.", "str", {"str", "summary"});
+    args.addArgument<std::string>("file", "File to look at. If no file is given, read from stdin.", 0, 1);
     args.parseArgs(argc, argv);
 
     // read data
     summarize::TsvFile tsvFile;
     tsvFile.setDelim(args.getOptionValue<char>("sep"));
     bool hasHeader = !args.getOptionValue<bool>("noHeader");
-    if(args.getArgumentCount("file") == 0) {
+    if(args.getArgument("file").getArgCount() == 0) {
         if(!tsvFile.read(std::cin, hasHeader)) {
             std::cerr << "Could not read table from stdin!\n";
             return 1;
@@ -43,7 +41,7 @@ int main(int argc, char** argv)
     if(args.getOptionValue("mode") == "summary") {
         tsvFile.printSummary();
     } else {
-        std::cout << (args.getArgumentCount("file") == 0 ? "stdin" : args.getArgumentValue("file")) << ": ";
+        std::cout << (args.getArgument("file").getArgCount() == 0 ? "stdin" : args.getArgumentValue("file")) << ": ";
         tsvFile.printStructure(args.getOptionValue<int>("rows"));
     }
 
