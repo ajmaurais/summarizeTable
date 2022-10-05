@@ -27,7 +27,7 @@ START_TEST("Params")
     END_SECTION
 
     START_SECTION("Test boolean options")
-        params::Option bool_option('b', "bool", "A boolean ", params::Option::TYPE::BOOL);
+        params::Option bool_option = params::Option().create<bool>('b', "bool", "A boolean");
         EXPECT_EQUAL(bool_option.isValid(), true)
         EXPECT_EQUAL(bool_option.isValid("true"), true)
         EXPECT_EQUAL(bool_option.isValid("TRUE"), true)
@@ -47,12 +47,12 @@ START_TEST("Params")
         EXPECT_EQUAL(bool_option.setValue("bar"), false)
         EXPECT_EQUAL(bool_option.isValid(), false)
 
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('b', "", "", params::Option::TYPE::INT, "", params::Option::ACTION::STORE_FALSE))
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('b', "", "", params::Option::TYPE::BOOL, "foo"))
+        // EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<int>('b', "", "", "", params::Option::ACTION::STORE_FALSE))
+        // EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<int>('b', "", "", "foo"))
     END_SECTION
 
     START_SECTION("Test integer options")
-        params::Option int_option('i', "int", "A integer option", params::Option::TYPE::INT);
+        params::Option int_option = params::Option().create<int>('i', "int", "A integer option");
         EXPECT_EQUAL(int_option.isValid(), true)
         EXPECT_EQUAL(int_option.isValid("0"), true)
         EXPECT_EQUAL(int_option.isValid("+99"), false)
@@ -74,12 +74,12 @@ START_TEST("Params")
         EXPECT_EQUAL(int_option.setValue("+3"), false)
         EXPECT_EQUAL(int_option.isValid(), false)
 
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::INT, "fart"))
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::INT, "0.16"))
+        // EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::INT, "fart"))
+        // EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::INT, "0.16"))
     END_SECTION
 
     START_SECTION("Test float options")
-        params::Option float_option('f', "float", "A float option", params::Option::TYPE::FLOAT);
+        params::Option float_option = params::Option().create<float>('f', "float", "A float option");
         EXPECT_EQUAL(float_option.isValid(), true)
         EXPECT_EQUAL(float_option.isValid("0"), true)
         EXPECT_EQUAL(float_option.isValid("0.19"), true)
@@ -106,15 +106,15 @@ START_TEST("Params")
         EXPECT_EQUAL(float_option.setValue("+3"), false)
         EXPECT_EQUAL(float_option.isValid(), false)
 
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::FLOAT, "fart"))
+        // EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::FLOAT, "fart"))
     END_SECTION
 
     START_SECTION("Test string options")
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('-', "", "", params::Option::TYPE::STRING))
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('-', "--str", "", params::Option::TYPE::STRING))
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('s', "--str", "", params::Option::TYPE::STRING))
-        EXPECT_EXCEPTION(std::invalid_argument, params::Option('s', "str", "", params::Option::TYPE::STRING,
-                                                               "true", params::Option::ACTION::STORE_TRUE))
+        EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<std::string>('-', "", ""))
+        EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<std::string>('-', "--str", ""))
+        EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<std::string>('s', "--str", ""))
+        EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<std::string>('s', "str", "", "true",
+                                                                                     params::Option::ACTION::STORE_TRUE))
     END_SECTION
 
     START_SECTION("Test Params help")
@@ -133,14 +133,14 @@ START_TEST("Params")
         params::Option::maxLineLen = 80;
 
         // test single line help signature
-        params::Option helpOption('h', "help", "Display help message and exit.",
-                                  params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
+        params::Option helpOption = params::Option().create<bool>('h', "help", "Display help message and exit.",
+                                                                  "false", params::Option::ACTION::HELP);
         expected = "  -h, --help            Display help message and exit.";
         EXPECT_EQUAL(helpOption.signature(2), expected)
 
         // multi line help signature
-        helpOption = params::Option('h', "help", "Display a really interesting and important help message that has more than 1 line",
-                                    params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
+        helpOption = params::Option().create<bool>('h', "help", "Display a really interesting and important help message that has more than 1 line",
+                                                   false, params::Option::ACTION::HELP);
         expected = "  -h, --help            Display a really interesting and important help message\n"
                    "                        that has more than 1 line";
         EXPECT_EQUAL(helpOption.signature(2), expected)
@@ -149,8 +149,7 @@ START_TEST("Params")
         std::string longMessage = "Display a really interesting and important help message that has more than 2 "
                                   "lines. It will be the best help message the you will ever see in your life because "
                                   "it is so long and descriptive.";
-        helpOption = params::Option('h', "help", longMessage,
-                                    params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
+        helpOption = params::Option().create<bool>('h', "help", longMessage, "false", params::Option::ACTION::HELP);
         expected = "  -h, --help            Display a really interesting and important help message\n"
                    "                        that has more than 2 lines. It will be the best help\n"
                    "                        message the you will ever see in your life because it is\n"
@@ -158,32 +157,31 @@ START_TEST("Params")
         EXPECT_EQUAL(helpOption.signature(2), expected)
 
         // 3 line help signature with long flag
-        helpOption = params::Option("thingsToPrint",
-                                    "Display a really interesting and important help message that has more than 1 line.",
-                                    params::Option::TYPE::INT, "");
+        helpOption = params::Option().create<int>("thingsToPrint",
+                                                  "Display a really interesting and important help message that has more than 1 line.");
         expected = "    --thingsToPrint THINGSTOPRINT\n"
                    "                          Display a really interesting and important help\n"
                    "                          message that has more than 1 line.";
         EXPECT_EQUAL(helpOption.signature(4), expected)
 
         // edge case
-        helpOption = params::Option('h', "helpHelpPleasse", "Display help message and exit.",
-                                   params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
+        helpOption = params::Option().create<bool>('h', "helpHelpPleasse", "Display help message and exit.",
+                                                   "false", params::Option::ACTION::HELP);
         expected = "  -h, --helpHelpPleasse Display help message and exit.";
         EXPECT_EQUAL(helpOption.signature(2), expected)
 
         // edge case
-        helpOption = params::Option('h', "helpHelpPleasse", "Display help message and exit.",
-                                    params::Option::TYPE::BOOL, "false", params::Option::ACTION::HELP);
+        helpOption = params::Option().create<bool>('h', "helpHelpPleasse", "Display help message and exit.",
+                                                   "false", params::Option::ACTION::HELP);
         expected = "-h, --helpHelpPleasse\n"
                    "                    Display help message and exit.";
         params::Option::indendentLen = 20;
         EXPECT_EQUAL(helpOption.signature(0), expected)
 
         // 3 line help signature with long flag and default option
-        helpOption = params::Option("thingsToPrint",
-                                    "Display a really interesting and important help message that has more than 1 line.",
-                                    params::Option::TYPE::INT, "5");
+        helpOption = params::Option().create<int>("thingsToPrint",
+                                                  "Display a really interesting and important help message that has more than 1 line.",
+                                                  5);
         expected = "     --thingsToPrint THINGSTOPRINT\n"
                    "                           Display a really interesting and important help\n"
                    "                           message that has more than 1 line. '5' is the\n"
@@ -191,7 +189,7 @@ START_TEST("Params")
         params::Option::indendentLen = 22;
         EXPECT_EQUAL(helpOption.signature(5), expected)
 
-        params::PositionalArgument positional("a_positional_arg", "A positional argument.", params::Option::TYPE::STRING);
+        params::PositionalArgument positional = params::PositionalArgument().create<std::string>("a_positional_arg", "A positional argument.");
         expected = "  a_positional_arg      A positional argument.";
         std::string obsd = positional.signature(2);
         EXPECT_EQUAL(positional.signature(2), expected)
@@ -219,7 +217,7 @@ START_TEST("Params")
         EXPECT_EQUAL(value, "\t")
 
         params::Params args("A test argument parser.");
-        EXPECT_EXCEPTION(std::invalid_argument, args.addArgument("a positional argument", "A positional argument."))
+        EXPECT_EXCEPTION(std::invalid_argument, args.addArgument<std::string>("a positional argument", "A positional argument."))
         std::vector<std::string> argVector = {std::string(argv[0]), "-h"};
         char** argArray = new char* [TEST_ARGV_SIZE];
         int argCount = populateArgArray(argVector, argArray);
@@ -229,17 +227,17 @@ START_TEST("Params")
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
 
         // Test argument order parsing
-        args.addArgument("source", "Source file(s)", 1, std::string::npos);
-        args.addArgument("dest", "Destination");
+        args.addArgument<std::string>("source", "Source file(s)", 1, std::string::npos);
+        args.addArgument<std::string>("dest", "Destination");
         argVector = {std::string(argv[0]), "file1", "file2", "dest"};
         argCount = populateArgArray(argVector, argArray);
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
-        EXPECT_EQUAL(args.getArgumentValues("source").size(), 2)
-        EXPECT_EQUAL(args.getArgumentValues("dest").size(), 1)
+        EXPECT_EQUAL(args.getArgument("source").getArgCount(), 2)
+        EXPECT_EQUAL(args.getArgument("dest").getArgCount(), 1)
         EXPECT_EQUAL(args.getArgumentValue("dest"), "dest")
-        EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValues<int>("source"))
+        // EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValue<std::string>("source"))
         EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValue("source"))
-        EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValues("foo"))
+        // EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValues("foo"))
         EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValue("foo"))
         argVector = {std::string(argv[0]), "-", "file1", "file2", "dest"};
         argCount = populateArgArray(argVector, argArray);
@@ -253,11 +251,11 @@ START_TEST("Params")
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
 
         // test choices
-        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode1", "The mode.", params::Option::INT, "1", {"1", "foo"}))
-        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode2", "The mode.", params::Option::INT, "1", {"1", "2", "2"}))
-        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode3", "The mode.", params::Option::INT, "3", {"1", "2"}))
-        EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode4", "The mode.", params::Option::BOOL, "1", {"0", "1"}))
-        args.addOption("mode", "The mode.", params::Option::INT, "1", {"1", "2"});
+        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption<int>("mode1", "The mode.", 1, {1, "foo"}))
+        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode2", "The mode.", params::Option::INT, "1", {"1", "2", "2"}))
+        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode3", "The mode.", params::Option::INT, "3", {"1", "2"}))
+        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode4", "The mode.", params::Option::BOOL, "1", {"0", "1"}))
+        args.addOption<int>("mode", "The mode.", 1, {1, 2});
         argVector = {std::string(argv[0]), "--mode", "2", "file", "dest"};
         argCount = populateArgArray(argVector, argArray);
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), true)
@@ -265,21 +263,21 @@ START_TEST("Params")
         argVector = {std::string(argv[0]), "--mode", "3", "file", "dest"};
         argCount = populateArgArray(argVector, argArray);
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
-        params::Option intChoiceOption("foo", "The mode.", params::Option::INT, "1", {"1", "2"});
+        params::Option intChoiceOption = params::Option().create("foo", "The mode.", 1, {1, 2});
         EXPECT_EQUAL(intChoiceOption.signature(0), "--foo {1, 2}          The mode. '1' is the default.")
-        params::Option charChoiceOption("foo", "The mode.", params::Option::CHAR, "a", {"a", "b", "c"});
+        params::Option charChoiceOption = params::Option().create("foo", "The mode.", 'a', {'a', 'b', 'c'});
         EXPECT_EQUAL(charChoiceOption.signature(0), "--foo {'a', 'b', 'c'} The mode. 'a' is the default.")
 
         // Real program test
         params::Params programArgs("Summarize information in tsv/csv files.");
         programArgs.setHelpBehavior(params::Params::RETURN_FALSE);
         programArgs.setSingleDashBehavior(params::Params::START_POSITIONAL);
-        programArgs.addOption('n', "", "Number of lines to look for data types.", params::Option::TYPE::INT, "5");
-        programArgs.addOption('p', "rows", "Number of rows to print.", params::Option::TYPE::INT, "1");
-        programArgs.addOption('s', "noHeader", "Don't treat first line as header.",
-                       params::Option::BOOL, "false", params::Option::STORE_TRUE);
-        programArgs.addOption('F', "sep", "Field separator.", params::Option::CHAR, "\t");
-        programArgs.addOption('m', "mode", "Program output mode.", params::Option::STRING, "str", {"str", "summary"});
+        programArgs.addOption<int>('n', "", "Number of lines to look for data types.", 5);
+        programArgs.addOption<int>('p', "rows", "Number of rows to print.", 1);
+        programArgs.addOption<bool>('s', "noHeader", "Don't treat first line as header.",
+                                    false, params::Option::STORE_TRUE);
+        programArgs.addOption<char>('F', "sep", "Field separator.", '\t');
+        programArgs.addOption<std::string>('m', "mode", "Program output mode.", "str", {"str", "summary"});
         programArgs.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
 
         argVector = {std::string(argv[0]), "--help"};

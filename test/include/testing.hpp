@@ -52,7 +52,7 @@ namespace Test {
         } else {
             std::cout << " - line ";
         }
-        std::cout << line << ": ASSERT_EQUAL(" << lhs_str << ", " << rhs_str
+        std::cout << std::boolalpha << line << ": ASSERT_EQUAL(" << lhs_str << ", " << rhs_str
                   << ") -> got '" << lhs << "', expected '" << rhs << "'\n";
     }
 }

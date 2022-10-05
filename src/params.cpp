@@ -23,8 +23,23 @@ std::string params::ArgumentValue::valueTypeStr() const {
     return valueTypeToStr(VALUE_TYPE(_value.index()));
 }
 
+params::ArgumentValue::ArgumentValue(VALUE_TYPE type) {
+    switch(type) {
+        case VALUE_TYPE::BOOL: setValue<bool>(); return;
+        case VALUE_TYPE::INT: setValue<int>(); return;
+        case VALUE_TYPE::LONG: setValue<long>(); return;
+        case VALUE_TYPE::SIZE_T: setValue<size_t>(); return;
+        case VALUE_TYPE::FLOAT: setValue<float>(); return;
+        case VALUE_TYPE::DOUBLE: setValue<double>(); return;
+        case VALUE_TYPE::CHAR: setValue<char>(); return;
+        case VALUE_TYPE::STRING: setValue<std::string>(); return;
+    }
+}
+
 void params::ArgumentValue::setValue(std::string value) {
-    if(!isValid(value)) throw std::invalid_argument("'" + value + "' Can not be converted to");
+    if(!isValid(VALUE_TYPE(_value.index()), value))
+        throw std::invalid_argument("'" + value + "' Can not be converted to " +
+                                    valueTypeToStr(VALUE_TYPE(_value.index())));
     switch(_value.index()) {
         case VALUE_TYPE::BOOL: _setValue<bool>(value); return;
         case VALUE_TYPE::INT: _setValue<int>(value); return;
@@ -154,15 +169,11 @@ params::Argument::Argument() {
     _valueType = TYPE::STRING;
 }
 
-// params::PositionalArgument::PositionalArgument(std::string name, std::string help,
-//                                                size_t minValues, size_t maxValues,
-//                                                Argument::TYPE valueType) : Argument() {
-// }
-
 params::Argument::Argument(const params::Argument& rhs) {
     _name = rhs._name;
     _help = rhs._help;
     _valueType = rhs._valueType;
+    _templateType = rhs._templateType;
     _isSet = rhs._isSet;
 }
 
@@ -180,24 +191,58 @@ params::Argument& params::Argument::operator = (const params::Argument& rhs) = d
 params::Option& params::Option::operator = (const params::Option& rhs) = default;
 
 //! Check if \p value can be converted into \p params::Argument::valueType.
-bool params::ArgumentValue::isValid(const std::string& value) const {
-    if(_value.index() == VALUE_TYPE::STRING) return true; // it's already a string so it's valid.
-    if(_value.index() == VALUE_TYPE::CHAR) return value.size() == 1;
-    if(_value.index() == VALUE_TYPE::BOOL) {
-        return std::regex_match(value, std::regex("^(true|false|0|1)$", std::regex_constants::icase));
+bool params::ArgumentValue::isValid(params::ArgumentValue::VALUE_TYPE type, const std::string& value) {
+    switch(type) {
+        case VALUE_TYPE::STRING: return true; // it's already a string so it's valid.
+        case VALUE_TYPE::CHAR: return value.size() == 1;
+        case VALUE_TYPE::BOOL:
+            return std::regex_match(value, std::regex("^(true|false|0|1)$", std::regex_constants::icase));
+        case VALUE_TYPE::INT:
+        case VALUE_TYPE::LONG:
+        case VALUE_TYPE::SIZE_T:
+            return std::regex_match(value, std::regex("^-?[0-9]+$"));
+        case VALUE_TYPE::FLOAT:
+        case VALUE_TYPE::DOUBLE:
+            return std::regex_match(value, std::regex("^-?[0-9]+(\\.[0-9]*)?$"));
     }
-    if(_value.index() == VALUE_TYPE::INT) {
-        return std::regex_match(value, std::regex("^-?[0-9]+$"));
-    }
-    if(_value.index() == VALUE_TYPE::FLOAT) {
-        return std::regex_match(value, std::regex("^-?[0-9]+(\\.[0-9]*)?$"));
-    }
-    return false;
 }
 
+bool params::ArgumentValue::isValid(const std::string& s) const{
+    return isValid(VALUE_TYPE(_value.index()), s);
+}
+
+bool params::Argument::isValid(std::string s) const{
+   switch(_valueType) {
+       case TYPE::STRING: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::STRING, s);
+       case TYPE::CHAR: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::CHAR, s);
+       case TYPE::BOOL: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::BOOL, s);
+       case TYPE::INT: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::INT, s);
+       case TYPE::FLOAT: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::FLOAT, s);
+   }
+}
+
+//! Return true if after option is set, option is valid.
 bool params::Option::isValid() const {
-    if(_valueType != TYPE::BOOL && _action != ACTION::NONE) return false;
+    if(_valueType != TYPE::BOOL && _action != ACTION::NONE)
+        return false;
     if(!_choices.empty() && _choices.find(_value) == _choices.end())
+        return false;
+    if(!_defaultValue.isSet() && !_value.isSet())
+        return false;
+    return true;
+}
+
+/**
+ * Return true if \p s is a valid value for option.
+ * Specifically, check if \p s can be converted into valid option value,
+ * and check if \p s is a valid choice for option.
+ */
+bool params::Option::isValid(const std::string &s) const {
+    if(!Argument::isValid(s))
+        return false;
+    ArgumentValue find_s(_templateType);
+    find_s.setValue(s);
+    if(!_choices.empty() && _choices.find(find_s) == _choices.end())
         return false;
     return true;
 }
@@ -224,7 +269,8 @@ std::string params::PositionalArgument::invalidReason() const {
     return "";
 }
 
-bool params::Option::setValue(std::string value) {
+bool params::Option::setValue(const std::string& value) {
+    unsetValue();
     if(_valueType == TYPE::BOOL && _action != ACTION::NONE){
         if(!value.empty()) return false;
         if(_action == ACTION::STORE_TRUE) _value.setValue<bool>(true);
@@ -233,13 +279,11 @@ bool params::Option::setValue(std::string value) {
         if(_action == ACTION::VERSION) _value.setValue<bool>(true);
     }
     else {
+        if(!Argument::isValid(value)) return false;
         _value.setValue(value);
     }
-    if(isValid()) {
-        _isSet = true;
-        return true;
-    }
-    return false;
+    _isSet = true;
+    return isValid();
 }
 
 void params::Option::unsetValue() {
@@ -247,15 +291,13 @@ void params::Option::unsetValue() {
     _value = _defaultValue;
 }
 
-// bool params::PositionalArgument::addValue(std::string value) {
-//     if(_values.back().isValid(value)) {
-//         _isSet = true;
-//         return true;
-//     }
-//     _values.emplace_back();
-//     _values.back().setValue<std::string>(value);
-//     return false;
-// }
+void params::PositionalArgument::addValue(const std::string& value) {
+    _values.emplace_back(_templateType);
+    if(_values.back().isValid(value)) {
+        _isSet = true;
+    }
+    _values.back().setValue(value);
+}
 
 void params::PositionalArgument::unsetValues() {
     _isSet = false;
@@ -377,6 +419,22 @@ std::string params::PositionalArgument::signature(int margin) const {
 
 std::string params::Argument::multiLineString(std::string addStr, size_t margin, bool indentFirstLine) {
     return params::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
+}
+
+void params::Params::_addOption(const params::Option &option) {
+    std::string name = option.getName();
+    _options[name] = option;
+    _optionOrder.push_back(name);
+
+    // add option to _optionKeys map
+    std::string flags[2] = {(option.getShortFlag() == '\0' ? "" : std::string(1, option.getShortFlag())), option.getLongFlag()};
+    for(auto & flag : flags) {
+        if (!flag.empty()) {
+            if(_optionKeys.find(flag) != _optionKeys.end())
+                throw std::runtime_error("'" + flag + "' already exists as an option!");
+            _optionKeys[flag] = name;
+        }
+    }
 }
 
 // void params::Params::_addOption(char shortOpt, std::string longOpt, std::string help,

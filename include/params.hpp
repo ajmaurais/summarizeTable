@@ -29,6 +29,18 @@ namespace params {
         enum VALUE_TYPE {BOOL = 0, INT = 1, LONG = 2, SIZE_T = 3,
             FLOAT = 4, DOUBLE = 5, CHAR = 6, STRING = 7};
         static std::string valueTypeToStr(VALUE_TYPE type);
+        static bool isValid(VALUE_TYPE, const std::string&);
+        template <typename T> static VALUE_TYPE templateToType() {
+            if(std::is_same<T, bool>()) return VALUE_TYPE::BOOL;
+            if(std::is_same<T, int>()) return VALUE_TYPE::INT;
+            if(std::is_same<T, long>()) return VALUE_TYPE::LONG;
+            if(std::is_same<T, size_t>()) return VALUE_TYPE::SIZE_T;
+            if(std::is_same<T, float>()) return VALUE_TYPE::FLOAT;
+            if(std::is_same<T, double>()) return VALUE_TYPE::DOUBLE;
+            if(std::is_same<T, char>()) return VALUE_TYPE::CHAR;
+            if(std::is_same<T, std::string>()) return VALUE_TYPE::STRING;
+            throw std::invalid_argument("Unknown template!");
+        }
         typedef std::variant<bool,          // 0
                              int,           // 1
                              long,          // 2
@@ -56,13 +68,20 @@ namespace params {
             setValue<T>(dest);
         }
     public:
-        ArgumentValue() {}
+        ArgumentValue() {
+            _isSet = false;
+        }
         template <typename T> ArgumentValue(T value) {
             setValue<T>(value);
         }
+        explicit ArgumentValue(VALUE_TYPE type);
+        // bool operator == (const ArgumentValue& rhs) const {
+        //     return _value == rhs._value;
+        // }
 
         template <typename T> void setValue(){
             _value = T();
+            _isSet = false;
         }
         template <typename T> void setValue(T value){
             _value = value;
@@ -122,6 +141,7 @@ namespace params {
         std::string _help;
 
         TYPE _valueType;
+        ArgumentValue::VALUE_TYPE _templateType;
 
         //! True if option was set on the command line
         bool _isSet;
@@ -140,13 +160,14 @@ namespace params {
             _checkValidName();
         }
 
-        virtual bool isValid() const = 0;
+        // virtual bool isValid() const = 0;
         std::string getName() const {
             return _name;
         }
         TYPE getType() const {
             return _valueType;
         }
+        bool isValid(std::string s) const;
         bool isSet() const {
             return _isSet;
         }
@@ -171,7 +192,7 @@ namespace params {
         std::set<ArgumentValue, ArgumentValue::Compare> _choices;
 
         template<typename T>
-        void _initialize(char shortOpt, std::string longOpt, std::string help,
+        void _initialize(char shortOpt, std::string longOpt, std::string help, bool hasDefault,
                          T defaultVal, const std::vector<T>& choices, Option::ACTION action) {
             _shortOpt = shortOpt;
             _longOpt = longOpt;
@@ -180,8 +201,10 @@ namespace params {
             _help = help;
             _isSet = false;
             _valueType = getValueType<T>();
+            _templateType = ArgumentValue::templateToType<T>();
 
-            _defaultValue.setValue<T>(defaultVal);
+            if(hasDefault) _defaultValue.setValue<T>(defaultVal);
+            else _defaultValue.setValue<T>();
             _value.setValue<T>(defaultVal);
 
             _action = action;
@@ -211,6 +234,7 @@ namespace params {
             // _defaultValue = defaultVal;
             // _value = defaultVal;
         }
+        void _unset();
         void _checkOptFlags() const;
     public:
         Option() : Argument() {
@@ -220,36 +244,49 @@ namespace params {
         template<typename T>
         Option& create(char shortOpt, std::string longOpt, std::string help,
                        T defaultVal, const std::vector<T>& choices) {
-            _initialize<T>(shortOpt, longOpt, help, defaultVal, choices, NONE);
+            _initialize<T>(shortOpt, longOpt, help, true, defaultVal, choices, NONE);
             return *this;
         }
         template<typename T>
         Option& create(std::string longOpt, std::string help,
-                       T defaultVal, const std::vector<std::string>& choices) {
-            _initialize<T>('\0', longOpt, help, defaultVal, choices, NONE);
+                       T defaultVal, const std::vector<T>& choices) {
+            _initialize<T>('\0', longOpt, help, true, defaultVal, choices, NONE);
             return *this;
         }
         template <typename T>
         Option& create(char shortOpt, std::string longOpt, std::string help,
-                       T defaultVal = T(), ACTION action = NONE) {
-            _initialize<T>(shortOpt, longOpt, help, defaultVal, std::vector<T>(), action);
+                       T defaultVal, ACTION action = NONE) {
+            _initialize<T>(shortOpt, longOpt, help, true, defaultVal, std::vector<T>(), action);
             return *this;
         }
         template <typename T>
         Option& create(std::string longOpt, std::string help,
-                       T defaultVal, std::vector<T>(), ACTION action = NONE) {
-            _initialize<T>('\0', longOpt, help, defaultVal, action);
+                       T defaultVal, ACTION action = NONE) {
+            _initialize<T>('\0', longOpt, help, true, defaultVal, std::vector<T>(), action);
+            return *this;
+        }
+        template <typename T>
+        Option& create(char shortOpt, std::string longOpt, std::string help) {
+            _initialize<T>(shortOpt, longOpt, help, false, T(), std::vector<T>(), NONE);
+            return *this;
+        }
+        template <typename T>
+        Option& create(std::string longOpt, std::string help) {
+            _initialize<T>('\0', longOpt, help, false, T(), std::vector<T>(), NONE);
             return *this;
         }
         Option(const Option&);
         Option& operator = (const Option& rhs);
 
-        bool setValue(std::string value);
+        bool setValue(const std::string& value);
         void unsetValue();
 
+        std::string getLongFlag() const { return _longOpt; }
+        char getShortFlag() const { return _shortOpt; }
         ACTION getAction() const { return _action; }
         // bool isValid(std::string) const override;
-        bool isValid() const override;
+        bool isValid() const;
+        bool isValid(const std::string& s) const;
         std::string help() const override;
         std::string signature(int margin) const override;
         std::string getValue() const { return _value.getValue(); };
@@ -276,6 +313,7 @@ namespace params {
         template <typename T>
         PositionalArgument& create(std::string name, std::string help,
                                   size_t minValues = 1, size_t maxValues = 1) {
+            _templateType = ArgumentValue::templateToType<T>();
             _name = name;
             _checkValidName();
             _help = help;
@@ -286,18 +324,13 @@ namespace params {
             return *this;
         }
 
-        void addValue(std::string value) {
-            if(_values.back().isValid(value)) {
-                _isSet = true;
-            }
-            _values.emplace_back();
-            _values.back().setValue(value);
-        }
+        void addValue(const std::string& value);
         void unsetValues();
 
         size_t getMinArgs() const { return _minValues; }
         size_t getMaxArgs() const { return _maxValues; }
-        bool isValid() const override;
+        bool isValid() const;
+        bool isValid(const std::string& s) const { return Argument::isValid(s); }
         std::string invalidReason() const;
         std::string signature(int margin) const override;
 
@@ -374,25 +407,7 @@ namespace params {
         void _validatePositionalArgs() const;
         params::PositionalArgument* _nextArg(size_t&, bool);
         bool _doOptionAction(Option::ACTION, bool&) const;
-        template <typename T>
-        void _addOption(char shortOpt, std::string longOpt, std::string help,
-                       T defaultVal, const std::vector<T>& choices, Option::ACTION action) {
-            params::Option option = (choices.empty() ? params::Option().create<T>(shortOpt, longOpt, help, defaultVal, action):
-                                                       params::Option().create<T>(shortOpt, longOpt, help, defaultVal, choices));
-            std::string name = option.getName();
-            _options[name] = option;
-            _optionOrder.push_back(name);
-
-            // add option to _optionKeys map
-            std::string flags[2] = {(shortOpt == '\0' ? "" : std::string(1, shortOpt)), longOpt};
-            for(auto & flag : flags) {
-                if (!flag.empty()) {
-                    if(_optionKeys.find(flag) != _optionKeys.end())
-                        throw std::runtime_error("'" + flag + "' already exists as an option!");
-                    _optionKeys[flag] = name;
-                }
-            }
-        }
+        void _addOption(const Option& option);
     public:
         explicit Params(std::string description = "", std::string programName = "", bool help = true) {
             _description = description;
@@ -406,31 +421,42 @@ namespace params {
         }
 
         template <typename T>
+        void addOption(char shortOpt, std::string longOpt, std::string help) {
+            _addOption(Option().create<T>(shortOpt, longOpt, help));
+        }
+        template <typename T>
+        void addOption(std::string longOpt, std::string help) {
+            _addOption(Option().create<T>('\0', longOpt, help, false));
+        }
+        template <typename T>
         void addOption(char shortOpt, std::string longOpt, std::string help,
-                       T defaultVal = T(), Option::ACTION action = Option::ACTION::NONE) {
-            _addOption<T>(shortOpt, longOpt, help, defaultVal, std::vector<T>(), action);
+                       T defaultVal, Option::ACTION action = Option::ACTION::NONE) {
+            _addOption(Option().create<T>(shortOpt, longOpt, help, defaultVal, action));
         }
         template <typename T>
         void addOption(std::string longOpt, std::string help,
-                       T defaultVal = T(), Option::ACTION action = Option::ACTION::NONE) {
-            _addOption<T>('\0', longOpt, help, defaultVal, std::vector<bool>(), action);
+                       T defaultVal, Option::ACTION action = Option::ACTION::NONE) {
+            _addOption(Option().create<T>(longOpt, help, defaultVal, action));
         }
-        template <typename T> void addOption(char shortOpt, std::string longOpt, std::string help,
-                                             T defaultVal, const std::vector<T>& choices) {
-            _addOption<T>(shortOpt, longOpt, help, defaultVal, choices, Option::NONE);
+        template <typename T>
+        void addOption(char shortOpt, std::string longOpt, std::string help,
+                       T defaultVal, const std::vector<T>& choices) {
+            _addOption(Option().create<T>(shortOpt, longOpt, help, defaultVal, choices));
         }
         template <typename T> void addOption(std::string longOpt, std::string help,
                                              T defaultVal, const std::vector<T>& choices) {
-            _addOption<T>('\0', longOpt, help, defaultVal, choices, Option::NONE);
+            _addOption(Option().create<T>(longOpt, help, defaultVal, choices));
         }
         void setVersion(std::string version, char shortOpt = 'v', std::string longOpt = "version");
         template <typename T>
-        void addArgument(std::string name, std::string help,
-                         size_t minArgs = 1, size_t maxArgs = 1) {
+        void addArgument(std::string name, std::string help, size_t minArgs = 1, size_t maxArgs = 1) {
             if(_args.find(name) != _args.end())
                 throw std::runtime_error("'" + name + "' is already a positional argument");
             _args[name] = params::PositionalArgument().create<T>(name, help, minArgs, maxArgs);
             _argOrder.push_back(name);
+        }
+        void addArgument(std::string name, std::string help, size_t minArgs = 1, size_t maxArgs = 1) {
+            addArgument<std::string>(name, help, minArgs, maxArgs);
         }
         void setHelpMargin(int margin) {
             _helpMargin = margin;
