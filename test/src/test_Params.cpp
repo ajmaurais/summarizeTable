@@ -47,8 +47,6 @@ START_TEST("Params")
         EXPECT_EQUAL(bool_option.setValue("bar"), false)
         EXPECT_EQUAL(bool_option.isValid(), false)
 
-        // EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<int>('b', "", "", "", params::Option::ACTION::STORE_FALSE))
-        // EXPECT_EXCEPTION(std::invalid_argument, params::Option().create<int>('b', "", "", "foo"))
     END_SECTION
 
     START_SECTION("Test integer options")
@@ -74,8 +72,6 @@ START_TEST("Params")
         EXPECT_EQUAL(int_option.setValue("+3"), false)
         EXPECT_EQUAL(int_option.isValid(), false)
 
-        // EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::INT, "fart"))
-        // EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::INT, "0.16"))
     END_SECTION
 
     START_SECTION("Test float options")
@@ -106,7 +102,6 @@ START_TEST("Params")
         EXPECT_EQUAL(float_option.setValue("+3"), false)
         EXPECT_EQUAL(float_option.isValid(), false)
 
-        // EXPECT_EXCEPTION(std::invalid_argument, params::Option('i', "", "", params::Option::TYPE::FLOAT, "fart"))
     END_SECTION
 
     START_SECTION("Test string options")
@@ -198,26 +193,43 @@ START_TEST("Params")
     START_SECTION("Test arg parsing")
         // helper functions
         std::string key, value;
-        params::Option::parseOption("-p", key, value);
+        params::Params::splitOption("-p", key, value);
         EXPECT_EQUAL(key, "p")
-        params::Option::parseOption("--p", key, value);
+        params::Params::splitOption("ps", key, value);
         EXPECT_EQUAL(key, "p")
-        params::Option::parseOption("--help", key, value);
+        EXPECT_EQUAL(value, "s")
+        params::Params::splitOption("lth", key, value);
+        EXPECT_EQUAL(key, "l")
+        EXPECT_EQUAL(value, "th")
+        params::Params::splitOption("--p", key, value);
+        EXPECT_EQUAL(key, "")
+        params::Params::splitOption("--help", key, value);
         EXPECT_EQUAL(key, "help")
-        params::Option::parseOption("-help", key, value);
+        params::Params::splitOption("-help", key, value);
         EXPECT_EQUAL(key, "h")
         EXPECT_EQUAL(value, "elp")
-        params::Option::parseOption("---help", key, value);
-        EXPECT_EQUAL(key, "-help")
-        params::Option::parseOption("-F'\t'", key, value);
+        params::Params::splitOption("---help", key, value);
+        EXPECT_EQUAL(key, "")
+        params::Params::splitOption("-F'\t'", key, value);
         EXPECT_EQUAL(key, "F")
         EXPECT_EQUAL(value, "\t")
-        params::Option::parseOption("-F\t", key, value);
+        params::Params::splitOption("-F\t", key, value);
         EXPECT_EQUAL(key, "F")
         EXPECT_EQUAL(value, "\t")
+        params::Params::splitOption("--color=auto", key, value);
+        EXPECT_EQUAL(key, "color")
+        EXPECT_EQUAL(value, "auto")
+        params::Params::splitOption("--color='auto'", key, value);
+        EXPECT_EQUAL(key, "color")
+        EXPECT_EQUAL(value, "auto")
+        params::Params::splitOption("--print:spectra", key, value);
+        EXPECT_EQUAL(key, "print:spectra")
+        EXPECT_EQUAL(value, "")
+        params::Params::splitOption("--out.file='~/code/ionFinder/build/bin/script'", key, value);
+        EXPECT_EQUAL(key, "out.file")
+        EXPECT_EQUAL(value, "~/code/ionFinder/build/bin/script")
 
         params::Params args("A test argument parser.");
-        EXPECT_EXCEPTION(std::invalid_argument, args.addArgument<std::string>("a positional argument", "A positional argument."))
         std::vector<std::string> argVector = {std::string(argv[0]), "-h"};
         char** argArray = new char* [TEST_ARGV_SIZE];
         int argCount = populateArgArray(argVector, argArray);
@@ -235,9 +247,7 @@ START_TEST("Params")
         EXPECT_EQUAL(args.getArgument("source").getArgCount(), 2)
         EXPECT_EQUAL(args.getArgument("dest").getArgCount(), 1)
         EXPECT_EQUAL(args.getArgumentValue("dest"), "dest")
-        // EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValue<std::string>("source"))
         EXPECT_EXCEPTION(std::runtime_error, args.getArgumentValue("source"))
-        // EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValues("foo"))
         EXPECT_EXCEPTION(std::out_of_range, args.getArgumentValue("foo"))
         argVector = {std::string(argv[0]), "-", "file1", "file2", "dest"};
         argCount = populateArgArray(argVector, argArray);
@@ -251,10 +261,6 @@ START_TEST("Params")
         EXPECT_EQUAL(args.parseArgs(argCount, argArray), false)
 
         // test choices
-        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption<int>("mode1", "The mode.", 1, {1, "foo"}))
-        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode2", "The mode.", params::Option::INT, "1", {"1", "2", "2"}))
-        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode3", "The mode.", params::Option::INT, "3", {"1", "2"}))
-        // EXPECT_EXCEPTION(std::invalid_argument, args.addOption("mode4", "The mode.", params::Option::BOOL, "1", {"0", "1"}))
         args.addOption<int>("mode", "The mode.", 1, {1, 2});
         argVector = {std::string(argv[0]), "--mode", "2", "file", "dest"};
         argCount = populateArgArray(argVector, argArray);
@@ -276,8 +282,10 @@ START_TEST("Params")
         programArgs.addOption<int>('p', "rows", "Number of rows to print.", 1);
         programArgs.addOption<bool>('s', "noHeader", "Don't treat first line as header.",
                                     false, params::Option::STORE_TRUE);
+        programArgs.addOption<bool>('j', "", "Just another bool option.", false, params::Option::ACTION::STORE_TRUE);
         programArgs.addOption<char>('F', "sep", "Field separator.", '\t');
         programArgs.addOption<std::string>('m', "mode", "Program output mode.", "str", {"str", "summary"});
+        programArgs.setVersion("v1.0");
         programArgs.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
 
         argVector = {std::string(argv[0]), "--help"};
@@ -309,6 +317,8 @@ START_TEST("Params")
         argCount = populateArgArray(argVector, argArray);
         EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
         EXPECT_EQUAL(programArgs.getOptionValue<bool>("noHeader"), false)
+        EXPECT_EQUAL(programArgs.getOptionValue<int>("rows"), 2)
+        EXPECT_EQUAL(programArgs.getOptionValue<char>("sep"), ',')
 
         argVector = {std::string(argv[0]), "-n50", "-F' '", "--noHeader", "bar"};
         argCount = populateArgArray(argVector, argArray);
@@ -320,7 +330,49 @@ START_TEST("Params")
         argCount = populateArgArray(argVector, argArray);
         EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
 
+        argVector = {std::string(argv[0]), "-n", "50", "-sj", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), true)
+        EXPECT_EQUAL(programArgs.getOptionValue<bool>("j"), true)
+        EXPECT_EQUAL(programArgs.getOptionValue<bool>("noHeader"), true)
+
+        argVector = {std::string(argv[0]), "-n", "50", "-sjF", "\t", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), true)
+        EXPECT_EQUAL(programArgs.getOptionValue<bool>("j"), true)
+        EXPECT_EQUAL(programArgs.getOptionValue<bool>("noHeader"), true)
+        EXPECT_EQUAL(programArgs.getOptionValue<char>("sep"), '\t')
+        EXPECT_EQUAL(programArgs.getOptionValue<char>("F"), '\t')
+
+        argVector = {std::string(argv[0]), "-n", "50", "-sx", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+
+        argVector = {std::string(argv[0]), "-n", "50", "-sjx", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+
+        argVector = {std::string(argv[0]), "-n", "50", "--sj", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+
+        argVector = {std::string(argv[0]), "-n", "50", "--s", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+
+        argVector = {std::string(argv[0]), "--rows=50", "-s", "bar"};
+        argCount = populateArgArray(argVector, argArray);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), true)
+        EXPECT_EQUAL(programArgs.getOptionValue<int>("p"), 50)
+        EXPECT_EQUAL(programArgs.getOptionValue<int>("rows"), 50)
+
+        argVector = {std::string(argv[0]), "--version", "-n"};
+        argCount = populateArgArray(argVector, argArray);
+        programArgs.setVersionBehavior(params::Params::HELP_VERSION_BEHAVIOR::RETURN_FALSE);
+        EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
+
     delete[] argArray;
     END_SECTION
 
 END_TEST
+

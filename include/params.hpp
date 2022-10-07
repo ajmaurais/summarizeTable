@@ -126,7 +126,6 @@ namespace params {
         }
 
         //! Argument names must begin with a letter and have only alphanumeric characters, dash or underscore after.
-        static std::string validArgNamePattern;
         static size_t maxLineLen;
         static size_t indendentLen;
     protected:
@@ -140,9 +139,6 @@ namespace params {
         bool _isSet;
 
         std::string signature(std::string ret, int indent) const;
-        static bool isValidName(std::string);
-        void _checkValidName() const;
-        // template <typename T> static constexpr
     public:
         Argument(const Argument&);
         Argument& operator = (const Argument& rhs);
@@ -150,7 +146,6 @@ namespace params {
 
         void setName(std::string name) {
             _name = name;
-            _checkValidName();
         }
 
         // virtual bool isValid() const = 0;
@@ -175,7 +170,9 @@ namespace params {
         enum ACTION {
             STORE_TRUE, STORE_FALSE, HELP, VERSION, NONE
         };
-        // bool isValid(std::string) const override;
+
+        static std::string validLongOptionPattern;
+        static std::string validShortOptionPattern;
     private:
         char _shortOpt;
         std::string _longOpt;
@@ -279,8 +276,6 @@ namespace params {
         template <typename T> T getValue() const {
             return _value.getValue<T>();
         }
-
-        static void parseOption(std::string arg, std::string& option, std::string& value);
     };
 
     class PositionalArgument : public Argument {
@@ -298,7 +293,6 @@ namespace params {
                                   size_t minValues = 1, size_t maxValues = 1) {
             _templateType = ArgumentValue::templateToType<T>();
             _name = name;
-            _checkValidName();
             _help = help;
             _valueType = getValueType<T>();
             _minValues = minValues;
@@ -373,11 +367,15 @@ namespace params {
         HELP_VERSION_BEHAVIOR _helpBehavior;
         HELP_VERSION_BEHAVIOR _versionBehavior;
 
+        static bool _splitShortOption(std::string& arg, std::string& flag, std::string& value);
+        static bool _splitLongOption(std::string arg, std::string& flag, std::string& value);
         static bool isFlag(std::string arg) {
             return !arg.empty() && arg[0] == '-';
         }
         bool _isOption(std::string arg) const;
         bool _parsePositionalArgs(int, int, char**);
+        bool _parseShortOption(int&, int, char**, std::string);
+        bool _parseLongOption(int&, int, char**, std::string);
         void _validatePositionalArgs() const;
         params::PositionalArgument* _nextArg(size_t&, bool);
         bool _doOptionAction(Option::ACTION, bool&) const;
@@ -476,13 +474,7 @@ namespace params {
         const PositionalArgument& getArgument(std::string name) {
             return _args.at(name);
         }
-        // template <typename T> std::vector<T> getArgumentValues(const std::string& argName) const {
-        //     // return _args.at(argName).getValues<T>();
-        // }
-        //! Get the number of arguments that were given for \p argName on the command line.
-        // size_t getArgumentCount(const std::string& argName) const {
-        //     return _args.at(argName).getArgCount();
-        // }
+        static void splitOption(std::string arg, std::string& flag, std::string& value);
     };
 }
 

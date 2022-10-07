@@ -15,7 +15,7 @@ int main(int argc, char** argv)
     args.addOption<bool>("noHeader", "Don't treat first line as header.", false, params::Option::STORE_TRUE);
     args.addOption<char>('F', "sep", "Field separator.", '\t');
     args.addOption<std::string>('m', "mode", "Program output mode.", "str", {"str", "summary"});
-    args.addArgument<std::string>("file", "File to look at. If no file is given, read from stdin.", 0, 1);
+    args.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);
     args.parseArgs(argc, argv);
 
     // read data

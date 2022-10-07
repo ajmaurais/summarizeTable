@@ -1,7 +1,8 @@
 
 #include <params.hpp>
 
-std::string params::Argument::validArgNamePattern = "^([a-zA-Z][a-zA-Z0-9_\\-]+|[a-zA-Z0-9])$";
+std::string params::Option::validLongOptionPattern = "[a-zA-Z0-9][a-zA-Z0-9_\\-\\.:]+";
+std::string params::Option::validShortOptionPattern = "[a-zA-Z0-9]";
 size_t params::Argument::maxLineLen = params::MAX_LINE_LEN;
 size_t params::Argument::indendentLen = params::INDENT_LEN;
 
@@ -121,48 +122,16 @@ bool params::Argument::isNumeric(params::Argument::TYPE type) {
     }
 }
 
-//! Use params::VALID_ARG_NAME_REGEX to check if option name is valid
-bool params::Argument::isValidName(std::string name) {
-    return std::regex_match(name, std::regex(validArgNamePattern));
-}
-
-void params::Argument::_checkValidName() const {
-    if(!isValidName(_name))
-        throw std::invalid_argument("'" + _name + "' contains invalid characters!");
-}
-
 void params::Option::_checkOptFlags() const {
     if(_shortOpt == '\0' && _longOpt.empty())
         throw std::invalid_argument("Long or short option must be specified!");
-    if((_shortOpt != '\0' && _shortOpt == '-') || (!_longOpt.empty() && _longOpt[0] == '-'))
+    if((_shortOpt == '-') || (!_longOpt.empty() && _longOpt[0] == '-'))
         throw std::invalid_argument("Option flags can not begin with '-'!");
-    if((_shortOpt != '\0' && !isValidName(std::string(1, _shortOpt))) || (!_longOpt.empty() && !isValidName(_longOpt)))
-        throw std::invalid_argument("Long or short option flag contain invalid characters!");
+    if(_shortOpt != '\0' && !std::regex_match(std::string(1, _shortOpt), std::regex(validShortOptionPattern)))
+        throw std::invalid_argument("Short option flag contains invalid characters!");
+    if(!_longOpt.empty() && !std::regex_match(_longOpt, std::regex(validLongOptionPattern)))
+        throw std::invalid_argument("Long option flag contains invalid characters!");
 }
-
-// template<typename T>
-// params::Option::Option(char shortOpt, std::string longOpt, std::string help,
-//                        T defaultVal, Option::ACTION action) {
-//     _initialize<T>(shortOpt, longOpt, help, defaultVal, std::vector<std::string>(), action);
-// }
-//
-// template<typename T>
-// params::Option::Option(char shortOpt, std::string longOpt, std::string help,
-//                        T defaultVal, const std::vector<std::string>& choices) {
-//     _initialize<T>(shortOpt, longOpt, help, defaultVal, choices, NONE);
-// }
-//
-// template<typename T>
-// params::Option::Option(std::string longOpt, std::string help,
-//                        T defaultVal, const std::vector<std::string>& choices) {
-//     _initialize<T>('\0', longOpt, help, defaultVal, choices, NONE);
-// }
-
-// template <>
-// params::Option::Option(std::string longOpt, std::string help,
-//                        bool defaultVal, Option::ACTION action){
-//     _initialize<bool>('\0', longOpt, help, defaultVal, std::vector<bool>(), action);
-// }
 
 params::Argument::Argument() {
     _isSet = false;
@@ -303,29 +272,6 @@ std::string params::unquote(std::string s) {
     return (match.begin() + 1)->matched ? match[1] : match[2];
 }
 
-void params::Option::parseOption(std::string s, std::string& option, std::string& value) {
-    option.clear();
-    value.clear();
-    size_t len = std::min(size_t(2), s.size());
-    int dashCount = 0;
-    for(size_t i = 0; i < len; i++) {
-        if(s[0] == '-') {
-            s.erase(0, 1);
-            dashCount++;
-        }
-    }
-    if(dashCount == 1) { // short option
-        if(s.size() == 0) { // special case where option is '-'
-            option = "-";
-            return;
-        }
-        option = s[0];
-        value = unquote(s.substr(1));
-    } else {
-        option = s; // long option
-    }
-}
-
 std::string params::Argument::help() const {
     return _help;
 }
@@ -443,7 +389,7 @@ void params::Params::setVersion(std::string version, char shortOpt, std::string 
 bool params::Params::_isOption(std::string arg) const {
     if(!isFlag(arg)) return false;
     std::string key, value;
-    Option::parseOption(arg, key, value);
+    splitOption(arg, key, value);
     return _optionKeys.find(key) != _optionKeys.end();
 }
 
@@ -486,7 +432,7 @@ std::string params::Params::signature() const {
 }
 
 void params::Params::usage(std::ostream& out) const {
-    out << signature();
+    out << signature() << std::endl;
 }
 
 void params::Params::printVersion() const {
@@ -580,6 +526,149 @@ bool params::Params::_doOptionAction(Option::ACTION action, bool& returnVal) con
     }
 }
 
+void params::Params::splitOption(std::string s, std::string& flag, std::string& value) {
+    bool isLongOption = s.substr(0, std::min(size_t(2), s.size())) == "--";
+
+    if(isLongOption) _splitLongOption(s, flag, value);
+    else _splitShortOption(s, flag, value);
+}
+
+bool params::Params::_splitLongOption(std::string s, std::string& flag, std::string& value)
+{
+    flag.clear();
+    value.clear();
+    std::smatch match;
+    std::regex pattern("--(" + Option::validLongOptionPattern + ")(=(.+))?");
+    if(!std::regex_match(s, match, pattern)) {
+        return false;
+    }
+    flag = match[1];
+    value = unquote(match[3]);
+    return true;
+}
+
+bool params::Params::_splitShortOption(std::string& s, std::string& flag, std::string& value)
+{
+    flag.clear();
+    value.clear();
+    if(s.empty()) return false;
+
+    if(s[0] == '-') s.erase(0, 1);
+    if(s.size() == 0) { // special case where flag is '-'
+        flag = "-";
+        return true;
+    }
+    flag = s[0];
+    value = s.substr(1);
+    s.clear();
+    value = unquote(value);
+    return true;
+}
+
+bool params::Params::_parseShortOption(int& i, int argc, char** argv, std::string option)
+{
+    std::string flag, value;
+    while(Params::_splitShortOption(option, flag, value))
+    {
+        // avoid std::out_of_range when looking up option key.
+        if(_optionKeys.find(flag) == _optionKeys.end()) {
+            std::cerr << "ERROR: '" << option << "' is an unknown option\n";
+            return false;
+        }
+
+        // Look up key associated with Option for flag
+        std::string key = _optionKeys.at(flag);
+
+        // Check that the option associated with the key has a short option matching flag
+        if(_options.at(key).getShortFlag() != flag[0]) {
+            std::cerr << "ERROR: '" << option << "' is an unknown option\n";
+            return false;
+        }
+
+        // Handle special Option actions.
+        if (_options.at(key).getAction() == Option::HELP || _options.at(key).getAction() == Option::VERSION) {
+            bool returnVal;
+            if (_doOptionAction(_options.at(key).getAction(), returnVal))
+                return returnVal;
+        }
+
+        if (_options.at(key).getType() == Option::TYPE::BOOL &&
+            _options.at(key).getAction() != Option::ACTION::NONE)
+        {
+            option = value + option;
+            value = "";
+        } else {
+            if (value.empty()) {
+                if (i + 1 <= argc && !isFlag(std::string(argv[++i]))) {
+                    value = unquote(std::string(argv[i]));
+                } else {
+                    std::cerr << "ERROR: Missing argument for '" << option << "'\n";
+                    return false;
+                }
+            }
+        }
+        if (!_options.at(key).setValue(value)) {
+            std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << flag << "'\n";
+            return false;
+        }
+        if(option.empty()) break;
+    }
+    return true;
+}
+
+// std::string params::Option::validLongOptionPattern = "([a-zA-Z0-9][a-zA-Z0-9_\\-\\.:]*)(=(.+))?";
+bool params::Params::_parseLongOption(int& i, int argc, char** argv, std::string option)
+{
+    std::string flag, value;
+    if(!_splitLongOption(option, flag, value)) {
+        std::cerr << "ERROR: Can not parse long option: '" << option << "'\n";
+        return false;
+    }
+
+    // avoid std::out_of_range when looking up option key.
+    if(_optionKeys.find(flag) == _optionKeys.end()) {
+        std::cerr << "ERROR: '" << option << "' is an unknown option\n";
+        return false;
+    }
+
+    // Look up key associated with Option for flag
+    std::string key = _optionKeys.at(flag);
+
+    // Check that the option associated with the key has a short option matching flag
+    if(_options.at(key).getLongFlag() != flag) {
+        std::cerr << "ERROR: '" << option << "' is an unknown option\n";
+        return false;
+    }
+
+    // Handle special Option actions.
+    if (_options.at(key).getAction() == Option::HELP || _options.at(key).getAction() == Option::VERSION) {
+        bool returnVal;
+        if (_doOptionAction(_options.at(key).getAction(), returnVal))
+            return returnVal;
+    }
+
+    if (_options.at(key).getType() == Option::TYPE::BOOL &&
+        _options.at(key).getAction() != Option::ACTION::NONE)
+    {
+        option = value + option;
+        value = "";
+    } else {
+        if (value.empty()) {
+            if (i + 1 <= argc && !isFlag(std::string(argv[++i]))) {
+                value = unquote(std::string(argv[i]));
+            } else {
+                std::cerr << "ERROR: Missing argument for '" << option << "'\n";
+                return false;
+            }
+        }
+    }
+    if (!_options.at(key).setValue(value)) {
+        std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << flag << "'\n";
+        return false;
+    }
+    return true;
+}
+
 bool params::Params::parseArgs(int argc, char** argv)
 {
     clearArgs();
@@ -588,10 +677,9 @@ bool params::Params::parseArgs(int argc, char** argv)
         _programName = std::filesystem::path(std::string(argv[0])).filename();
     for(int i = 1; i < argc; i++)
     {
-        if(isFlag(std::string(argv[i])))
-        {
+        if(isFlag(std::string(argv[i]))) {
             std::string option = std::string(argv[i]);
-            if(!_isOption(option)) {
+            if (!_isOption(option)) {
                 if (option == "-") {
                     switch (_singleDashBehavior) {
                         case START_POSITIONAL:
@@ -604,35 +692,10 @@ bool params::Params::parseArgs(int argc, char** argv)
                 std::cerr << "ERROR: '" << option << "' is an unknown option\n";
                 return false;
             }
-
-            std::string flag, value;
-            Option::parseOption(option, flag, value);
-            std::string key = _optionKeys.at(flag);
-            if(_options.at(key).getAction() == Option::HELP || _options.at(key).getAction() == Option::VERSION) {
-                bool returnVal;
-                if(_doOptionAction(_options.at(key).getAction(), returnVal))
-                    return returnVal;
-            }
-
-            if(_options.at(key).getType() == Option::TYPE::BOOL &&
-               _options.at(key).getAction() != Option::ACTION::NONE &&
-               value.empty()) {
-                value = "";
-            }
-            else {
-                if(value.empty()) {
-                    if(i + 1 <= argc && !isFlag(std::string(argv[++i]))) {
-                        value = unquote(std::string(argv[i]));
-                    } else {
-                        std::cerr << "ERROR: Missing argument for '" << option << "'\n";
-                        return false;
-                    }
-                }
-            }
-            if(!_options.at(key).setValue(value)) {
-                std::cerr << "ERROR: '" << value << "' is an invalid argument for '" << flag << "'\n";
-                return false;
-            }
+            bool isLongOption = option.substr(0, std::min(size_t(2), option.size())) == "--";
+            bool success = isLongOption ? _parseLongOption(i, argc, argv, option) :
+                                          _parseShortOption(i, argc, argv, option);
+            if(!success) return false;
         }
         else { // we are in positional arguments
             return _parsePositionalArgs(i, argc, argv);
