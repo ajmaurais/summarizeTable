@@ -75,9 +75,6 @@ namespace params {
             setValue<T>(value);
         }
         explicit ArgumentValue(VALUE_TYPE type);
-        // bool operator == (const ArgumentValue& rhs) const {
-        //     return _value == rhs._value;
-        // }
 
         template <typename T> void setValue(){
             _value = T();
@@ -132,10 +129,6 @@ namespace params {
         static std::string validArgNamePattern;
         static size_t maxLineLen;
         static size_t indendentLen;
-        // void toType(const std::string&, char&) const;
-        // void toType(const std::string&, bool&) const;
-        // void toType(const std::string&, int&) const;
-        // void toType(const std::string&, float&) const;
     protected:
         std::string _name;
         std::string _help;
@@ -214,13 +207,8 @@ namespace params {
             }
             if(!isValid()) throw std::invalid_argument("Invalid option!");
 
-            // validate default arg if necessary
-            // if (defaultVal.isSet() && !isValid(defaultVal))
-            //     throw std::invalid_argument(defaultVal + " is an invalid value for TYPE!");
             if(!choices.empty()) {
                 for(const auto& choice: choices) {
-                    // if(!_value.isValid(choice))
-                    //     throw std::invalid_argument(choice + " is an invalid value for TYPE!");
                     _choices.emplace(choice);
                 }
                 if (_valueType == BOOL)
@@ -231,8 +219,6 @@ namespace params {
                 if (_choices.find(_defaultValue) == _choices.end())
                     throw std::invalid_argument("defaultValue of: '" + _defaultValue.str() + "' is not a valid choice!");
             }
-            // _defaultValue = defaultVal;
-            // _value = defaultVal;
         }
         void _unset();
         void _checkOptFlags() const;
@@ -291,9 +277,6 @@ namespace params {
         std::string signature(int margin) const override;
         std::string getValue() const { return _value.getValue(); };
         template <typename T> T getValue() const {
-            // T temp;
-            // toType(_value, temp);
-            // return temp;
             return _value.getValue<T>();
         }
 
@@ -356,15 +339,6 @@ namespace params {
             toType(getValue(), ret);
             return ret;
         }
-        // template <typename T> std::vector<T> getValues() const {
-        //     std::vector<T> ret;
-        //     T temp;
-        //     for(const auto& value: _values) {
-        //         toType(value, temp);
-        //         ret.push_back(temp);
-        //     }
-        //     return ret;
-        // }
     };
 
     class Params {
@@ -497,7 +471,6 @@ namespace params {
         template <typename T> T getArgumentValue(const std::string& argName) const {
             return _args.at(argName).getValue<T>();
         }
-        // std::vector<std::string> getArgumentValues(std::string argName) const;
         size_t nArgs(std::string argName) const;
         size_t nPositionalArgs() const { return _args.size(); }
         const PositionalArgument& getArgument(std::string name) {
