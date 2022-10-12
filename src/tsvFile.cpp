@@ -75,7 +75,7 @@ void summarize::TsvFile::printStructure(size_t nRows) const {
     size_t maxRowLen = maxLength(_headers);
     for(size_t i = 0; i < _headers.size(); i++) {
         size_t indent = maxRowI - numDigits(i);
-        std::cout << std::string(indent, ' ') << std::to_string(i) << ") " << _headers[i]
+        std::cout << std::string(indent, ' ') << std::to_string(i + 1) << ") " << _headers[i]
                   << std::string(maxRowLen - _headers.at(i).size(), ' ') + ':';
         // TODO: add data type here!
         size_t printRows = std::min(nRows, _nRows);
