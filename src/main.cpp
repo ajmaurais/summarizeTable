@@ -2,17 +2,17 @@
 #include <iostream>
 #include <fstream>
 
-#include <params.hpp>
+#include <argparse.hpp>
 #include <tsvFile.hpp>
 
 int main(int argc, char** argv)
 {
     // Parse command line arguments
-    params::Params args("Summarize information in tsv/csv files.");
-    args.setSingleDashBehavior(params::Params::START_POSITIONAL);
+    argparse::ArgumentParser args("Summarize information in tsv/csv files.");
+    args.setSingleDashBehavior(argparse::ArgumentParser::START_POSITIONAL);
     args.addOption<int>('n', "", "Number of lines to look for data types. If reading from stdin, this option is ignored.");
     args.addOption<int>('p', "rows", "Number of rows to print.", 1);
-    args.addOption<bool>("noHeader", "Don't treat first line as header.", false, params::Option::STORE_TRUE);
+    args.addOption<bool>("noHeader", "Don't treat first line as header.", false, argparse::Option::STORE_TRUE);
     args.addOption<char>('F', "sep", "Field separator.", '\t');
     args.addOption<std::string>('m', "mode", "Program output mode.", "str", {"str", "summary"});
     args.addArgument("file", "File to look at. If no file is given, read from stdin.", 0, 1);

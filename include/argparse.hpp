@@ -13,7 +13,7 @@
 #include <variant>
 // #include <function>
 
-namespace params {
+namespace argparse {
     const size_t MAX_LINE_LEN = 100;
     const size_t INDENT_LEN = 22;
 
@@ -335,7 +335,7 @@ namespace params {
         }
     };
 
-    class Params {
+    class ArgumentParser {
     public:
         //! Behavior for when a single dash ('-') is given as an argument.
         enum SINGLE_DASH {
@@ -377,11 +377,11 @@ namespace params {
         bool _parseShortOption(int&, int, char**, std::string);
         bool _parseLongOption(int&, int, char**, std::string);
         void _validatePositionalArgs() const;
-        params::PositionalArgument* _nextArg(size_t&, bool);
+        argparse::PositionalArgument* _nextArg(size_t&, bool);
         bool _doOptionAction(Option::ACTION, bool&) const;
         void _addOption(const Option& option);
     public:
-        explicit Params(std::string description = "", std::string programName = "", bool help = true) {
+        explicit ArgumentParser(std::string description = "", std::string programName = "", bool help = true) {
             _description = description;
             _programName = programName;
             _help = help;
@@ -424,7 +424,7 @@ namespace params {
         void addArgument(std::string name, std::string help, size_t minArgs = 1, size_t maxArgs = 1) {
             if(_args.find(name) != _args.end())
                 throw std::runtime_error("'" + name + "' is already a positional argument");
-            _args[name] = params::PositionalArgument().create<T>(name, help, minArgs, maxArgs);
+            _args[name] = argparse::PositionalArgument().create<T>(name, help, minArgs, maxArgs);
             _argOrder.push_back(name);
         }
         void addArgument(std::string name, std::string help, size_t minArgs = 1, size_t maxArgs = 1) {

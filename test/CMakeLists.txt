@@ -10,6 +10,6 @@ macro(add_test_target TEST_NAME)
     add_test(${TEST_NAME} ${TARGET})
 endmacro()
 
-add_test_target(Params ${CMAKE_CURRENT_SOURCE_DIR}/../src/params.cpp src/test_Params.cpp)
+add_test_target(ArgumentParser ${CMAKE_CURRENT_SOURCE_DIR}/../src/argparse.cpp src/test_ArgumentParser.cpp)
 add_test_target(TsvFile ${CMAKE_CURRENT_SOURCE_DIR}/../src/tsvFile.cpp src/test_TsvFile.cpp)
 

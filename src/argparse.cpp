@@ -1,12 +1,12 @@
 
-#include <params.hpp>
+#include <argparse.hpp>
 
-std::string params::Option::validLongOptionPattern = "[a-zA-Z0-9][a-zA-Z0-9_\\-\\.:]+";
-std::string params::Option::validShortOptionPattern = "[a-zA-Z0-9]";
-size_t params::Argument::maxLineLen = params::MAX_LINE_LEN;
-size_t params::Argument::indendentLen = params::INDENT_LEN;
+std::string argparse::Option::validLongOptionPattern = "[a-zA-Z0-9][a-zA-Z0-9_\\-\\.:]+";
+std::string argparse::Option::validShortOptionPattern = "[a-zA-Z0-9]";
+size_t argparse::Argument::maxLineLen = argparse::MAX_LINE_LEN;
+size_t argparse::Argument::indendentLen = argparse::INDENT_LEN;
 
-std::string params::ArgumentValue::valueTypeToStr(params::ArgumentValue::VALUE_TYPE type) {
+std::string argparse::ArgumentValue::valueTypeToStr(argparse::ArgumentValue::VALUE_TYPE type) {
     switch(type) {
         case STRING: return "std::string";
         case CHAR: return "char";
@@ -20,11 +20,11 @@ std::string params::ArgumentValue::valueTypeToStr(params::ArgumentValue::VALUE_T
     }
 }
 
-std::string params::ArgumentValue::valueTypeStr() const {
+std::string argparse::ArgumentValue::valueTypeStr() const {
     return valueTypeToStr(VALUE_TYPE(_value.index()));
 }
 
-params::ArgumentValue::ArgumentValue(VALUE_TYPE type) {
+argparse::ArgumentValue::ArgumentValue(VALUE_TYPE type) {
     switch(type) {
         case VALUE_TYPE::BOOL: setValue<bool>(); return;
         case VALUE_TYPE::INT: setValue<int>(); return;
@@ -37,7 +37,7 @@ params::ArgumentValue::ArgumentValue(VALUE_TYPE type) {
     }
 }
 
-void params::ArgumentValue::setValue(std::string value) {
+void argparse::ArgumentValue::setValue(std::string value) {
     if(!isValid(VALUE_TYPE(_value.index()), value))
         throw std::invalid_argument("'" + value + "' Can not be converted to " +
                                     valueTypeToStr(VALUE_TYPE(_value.index())));
@@ -54,7 +54,7 @@ void params::ArgumentValue::setValue(std::string value) {
     }
 }
 
-std::string params::ArgumentValue::str() const {
+std::string argparse::ArgumentValue::str() const {
     switch(_value.index()) {
         case BOOL: return (std::get<bool>(_value) ? "true" : "false");
         case INT: return std::to_string(std::get<int>(_value));
@@ -68,7 +68,7 @@ std::string params::ArgumentValue::str() const {
     }
 }
 
-void params::ArgumentValue::toType(bool& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(bool& lhs, const std::string& rhs) {
     std::string temp = rhs;
     std::transform(temp.begin(), temp.end(), temp.begin(), ::tolower);
     if(temp == "true") lhs = true;
@@ -76,31 +76,31 @@ void params::ArgumentValue::toType(bool& lhs, const std::string& rhs) {
     else lhs = bool(std::stoi(rhs));
 }
 
-void params::ArgumentValue::toType(int& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(int& lhs, const std::string& rhs) {
     lhs = std::stoi(rhs);
 }
 
-void params::ArgumentValue::toType(long& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(long& lhs, const std::string& rhs) {
     lhs = std::stol(rhs);
 }
 
-void params::ArgumentValue::toType(size_t& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(size_t& lhs, const std::string& rhs) {
     lhs = std::stoul(rhs);
 }
 
-void params::ArgumentValue::toType(float& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(float& lhs, const std::string& rhs) {
     lhs = std::stof(rhs);
 }
 
-void params::ArgumentValue::toType(double& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(double& lhs, const std::string& rhs) {
     lhs = std::stod(rhs);
 }
 
-void params::ArgumentValue::toType(char& lhs, const std::string& rhs) {
+void argparse::ArgumentValue::toType(char& lhs, const std::string& rhs) {
     lhs = rhs[0];
 }
 
-std::string params::Argument::typeToStr(params::Argument::TYPE type) {
+std::string argparse::Argument::typeToStr(argparse::Argument::TYPE type) {
     switch(type) {
         case STRING: return "std::string";
         case CHAR: return "char";
@@ -110,7 +110,7 @@ std::string params::Argument::typeToStr(params::Argument::TYPE type) {
     }
 }
 
-bool params::Argument::isNumeric(params::Argument::TYPE type) {
+bool argparse::Argument::isNumeric(argparse::Argument::TYPE type) {
     switch(type) {
         case STRING:
         case CHAR:
@@ -122,7 +122,7 @@ bool params::Argument::isNumeric(params::Argument::TYPE type) {
     }
 }
 
-void params::Option::_checkOptFlags() const {
+void argparse::Option::_checkOptFlags() const {
     if(_shortOpt == '\0' && _longOpt.empty())
         throw std::invalid_argument("Long or short option must be specified!");
     if((_shortOpt == '-') || (!_longOpt.empty() && _longOpt[0] == '-'))
@@ -133,12 +133,12 @@ void params::Option::_checkOptFlags() const {
         throw std::invalid_argument("Long option flag contains invalid characters!");
 }
 
-params::Argument::Argument() {
+argparse::Argument::Argument() {
     _isSet = false;
     _valueType = TYPE::STRING;
 }
 
-params::Argument::Argument(const params::Argument& rhs) {
+argparse::Argument::Argument(const argparse::Argument& rhs) {
     _name = rhs._name;
     _help = rhs._help;
     _valueType = rhs._valueType;
@@ -146,7 +146,7 @@ params::Argument::Argument(const params::Argument& rhs) {
     _isSet = rhs._isSet;
 }
 
-params::Option::Option(const Option& rhs) : Argument(rhs) {
+argparse::Option::Option(const Option& rhs) : Argument(rhs) {
     _value = rhs._value;
     _shortOpt = rhs._shortOpt;
     _longOpt = rhs._longOpt;
@@ -155,12 +155,12 @@ params::Option::Option(const Option& rhs) : Argument(rhs) {
     _action = rhs._action;
 }
 
-params::Argument& params::Argument::operator = (const params::Argument& rhs) = default;
+argparse::Argument& argparse::Argument::operator = (const argparse::Argument& rhs) = default;
 
-params::Option& params::Option::operator = (const params::Option& rhs) = default;
+argparse::Option& argparse::Option::operator = (const argparse::Option& rhs) = default;
 
-//! Check if \p value can be converted into \p params::Argument::valueType.
-bool params::ArgumentValue::isValid(params::ArgumentValue::VALUE_TYPE type, const std::string& value) {
+//! Check if \p value can be converted into \p argparse::Argument::valueType.
+bool argparse::ArgumentValue::isValid(argparse::ArgumentValue::VALUE_TYPE type, const std::string& value) {
     switch(type) {
         case VALUE_TYPE::STRING: return true; // it's already a string so it's valid.
         case VALUE_TYPE::CHAR: return value.size() == 1;
@@ -176,11 +176,11 @@ bool params::ArgumentValue::isValid(params::ArgumentValue::VALUE_TYPE type, cons
     }
 }
 
-bool params::ArgumentValue::isValid(const std::string& s) const{
+bool argparse::ArgumentValue::isValid(const std::string& s) const{
     return isValid(VALUE_TYPE(_value.index()), s);
 }
 
-bool params::Argument::isValid(std::string s) const{
+bool argparse::Argument::isValid(std::string s) const{
    switch(_valueType) {
        case TYPE::STRING: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::STRING, s);
        case TYPE::CHAR: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::CHAR, s);
@@ -191,7 +191,7 @@ bool params::Argument::isValid(std::string s) const{
 }
 
 //! Return true if after option is set, option is valid.
-bool params::Option::isValid() const {
+bool argparse::Option::isValid() const {
     if(_valueType != TYPE::BOOL && _action != ACTION::NONE)
         return false;
     if(!_choices.empty() && _choices.find(_value) == _choices.end())
@@ -206,7 +206,7 @@ bool params::Option::isValid() const {
  * Specifically, check if \p s can be converted into valid option value,
  * and check if \p s is a valid choice for option.
  */
-bool params::Option::isValid(const std::string &s) const {
+bool argparse::Option::isValid(const std::string &s) const {
     if(!Argument::isValid(s))
         return false;
     ArgumentValue find_s(_templateType);
@@ -216,13 +216,13 @@ bool params::Option::isValid(const std::string &s) const {
     return true;
 }
 
-bool params::PositionalArgument::isValid () const {
+bool argparse::PositionalArgument::isValid () const {
     if(getArgCount() < _minValues || getArgCount() > _maxValues)
         return false;
     return true;
 }
 
-std::string params::PositionalArgument::invalidReason() const {
+std::string argparse::PositionalArgument::invalidReason() const {
     if(getArgCount() < _minValues)
         return "Not enough arguments given!";
     if(getArgCount() > _maxValues)
@@ -230,7 +230,7 @@ std::string params::PositionalArgument::invalidReason() const {
     return "";
 }
 
-bool params::Option::setValue(const std::string& value) {
+bool argparse::Option::setValue(const std::string& value) {
     unsetValue();
     if(_valueType == TYPE::BOOL && _action != ACTION::NONE){
         if(!value.empty()) return false;
@@ -247,12 +247,12 @@ bool params::Option::setValue(const std::string& value) {
     return isValid();
 }
 
-void params::Option::unsetValue() {
+void argparse::Option::unsetValue() {
     _isSet = false;
     _value = _defaultValue;
 }
 
-void params::PositionalArgument::addValue(const std::string& value) {
+void argparse::PositionalArgument::addValue(const std::string& value) {
     _values.emplace_back(_templateType);
     if(_values.back().isValid(value)) {
         _isSet = true;
@@ -260,23 +260,23 @@ void params::PositionalArgument::addValue(const std::string& value) {
     _values.back().setValue(value);
 }
 
-void params::PositionalArgument::unsetValues() {
+void argparse::PositionalArgument::unsetValues() {
     _isSet = false;
     _values.clear();
 }
 
-std::string params::unquote(std::string s) {
+std::string argparse::unquote(std::string s) {
     std::smatch match;
     if(!std::regex_match(s, match, std::regex(R"(\"(.*)\"|'(.*)')")))
         return s;
     return (match.begin() + 1)->matched ? match[1] : match[2];
 }
 
-std::string params::Argument::help() const {
+std::string argparse::Argument::help() const {
     return _help;
 }
 
-std::string params::escapeEscapeCharacters(const std::string& s) {
+std::string argparse::escapeEscapeCharacters(const std::string& s) {
     std::string ret;
     for(auto c: s) {
         switch(c) {
@@ -296,7 +296,7 @@ std::string params::escapeEscapeCharacters(const std::string& s) {
     return ret;
 }
 
-std::string params::Option::help() const {
+std::string argparse::Option::help() const {
     std::string ret = Argument::help();
     // if(_valueType == TYPE::BOOL && _action != ACTION::NONE)
     if(_defaultValue.isSet() && _action == ACTION::NONE) {
@@ -305,7 +305,7 @@ std::string params::Option::help() const {
     return ret;
 }
 
-std::string params::Argument::signature(std::string ret, int margin) const {
+std::string argparse::Argument::signature(std::string ret, int margin) const {
     size_t spacesBeforeHelp = indendentLen > ret.size() ? indendentLen + margin - ret.size() : 0;
     if(spacesBeforeHelp <= 0) {
         ret += "\n";
@@ -319,7 +319,7 @@ std::string params::Argument::signature(std::string ret, int margin) const {
     return ret;
 }
 
-std::string params::Option::signature(int margin) const {
+std::string argparse::Option::signature(int margin) const {
     std::string ret;
     std::string name;
     if(_action != ACTION::NONE) {
@@ -351,15 +351,15 @@ std::string params::Option::signature(int margin) const {
     return Argument::signature(ret, margin);
 }
 
-std::string params::PositionalArgument::signature(int margin) const {
+std::string argparse::PositionalArgument::signature(int margin) const {
     return Argument::signature(_name, margin);
 }
 
-std::string params::Argument::multiLineString(std::string addStr, size_t margin, bool indentFirstLine) {
-    return params::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
+std::string argparse::Argument::multiLineString(std::string addStr, size_t margin, bool indentFirstLine) {
+    return argparse::multiLineString(addStr, margin, maxLineLen, indendentLen, indentFirstLine);
 }
 
-void params::Params::_addOption(const params::Option &option) {
+void argparse::ArgumentParser::_addOption(const argparse::Option &option) {
     std::string name = option.getName();
     _options[name] = option;
     _optionOrder.push_back(name);
@@ -376,7 +376,7 @@ void params::Params::_addOption(const params::Option &option) {
 }
 
 //! Set program version and add version option flag;
-void params::Params::setVersion(std::string version, char shortOpt, std::string longOpt) {
+void argparse::ArgumentParser::setVersion(std::string version, char shortOpt, std::string longOpt) {
     _version = version;
     addOption<bool>(shortOpt, longOpt, "Print version and exit", false, Option::ACTION::VERSION);
 }
@@ -386,15 +386,15 @@ void params::Params::setVersion(std::string version, char shortOpt, std::string 
  * @param arg A potential option flag (with dash included).
  * @return true if \p arg is an existing option.
  */
-bool params::Params::_isOption(std::string arg) const {
+bool argparse::ArgumentParser::_isOption(std::string arg) const {
     if(!isFlag(arg)) return false;
     std::string key, value;
     splitOption(arg, key, value);
     return _optionKeys.find(key) != _optionKeys.end();
 }
 
-void params::Params::printHelp() const {
-    std::cout << "Usage: " << signature() << "\n\n" << params::Option::multiLineString(_description, 0) << "\n";
+void argparse::ArgumentParser::printHelp() const {
+    std::cout << "Usage: " << signature() << "\n\n" << argparse::Option::multiLineString(_description, 0) << "\n";
 
     //options
     if(!_options.empty()) {
@@ -413,7 +413,7 @@ void params::Params::printHelp() const {
     std::cout << std::endl;
 }
 
-std::string params::Params::signature() const {
+std::string argparse::ArgumentParser::signature() const {
     std::string ret = _programName;
     if(!_options.empty()) ret += " [options]";
     if(!_args.empty()) {
@@ -431,15 +431,15 @@ std::string params::Params::signature() const {
     return ret;
 }
 
-void params::Params::usage(std::ostream& out) const {
+void argparse::ArgumentParser::usage(std::ostream& out) const {
     out << signature() << std::endl;
 }
 
-void params::Params::printVersion() const {
+void argparse::ArgumentParser::printVersion() const {
     std::cout << _programName << " " << _version << std::endl;
 }
 
-params::PositionalArgument* params::Params::_nextArg(size_t& currentArgIndex, bool endOfArgv) {
+argparse::PositionalArgument* argparse::ArgumentParser::_nextArg(size_t& currentArgIndex, bool endOfArgv) {
     if(currentArgIndex > nPositionalArgs()) return nullptr;
     if(endOfArgv) {
         currentArgIndex = _argOrder.size() - 1;
@@ -451,9 +451,9 @@ params::PositionalArgument* params::Params::_nextArg(size_t& currentArgIndex, bo
     return &_args.at(_argOrder[currentArgIndex]);
 }
 
-bool params::Params::_parsePositionalArgs(int i, int argc, char** argv) {
+bool argparse::ArgumentParser::_parsePositionalArgs(int i, int argc, char** argv) {
     _validatePositionalArgs();
-    params::PositionalArgument* currentArg = nullptr;
+    argparse::PositionalArgument* currentArg = nullptr;
     size_t currentArgIndex = 0;
     for(; i < argc ; i++) {
         currentArg = _nextArg(currentArgIndex, i + 1 >= argc);
@@ -472,7 +472,7 @@ bool params::Params::_parsePositionalArgs(int i, int argc, char** argv) {
 }
 
 //! Check that the number of required positional args were given by the user on the command line.
-bool params::Params::checkPositionalArgs() const {
+bool argparse::ArgumentParser::checkPositionalArgs() const {
     bool allGood = true;
     for(const auto& arg: _args) {
         if(!arg.second.isValid()) {
@@ -486,7 +486,7 @@ bool params::Params::checkPositionalArgs() const {
 }
 
 //! Check that the structure of the positional arguments set by the developer is valid.
-void params::Params::_validatePositionalArgs() const {
+void argparse::ArgumentParser::_validatePositionalArgs() const {
     int infArgCount = 0;
     size_t nArgs = _argOrder.size();
     for(size_t i = 0; i < nArgs; i++) {
@@ -501,7 +501,7 @@ void params::Params::_validatePositionalArgs() const {
         throw std::runtime_error("Can not have more than 1 positional argument with infinite values.");
 }
 
-bool params::Params::_doOptionAction(Option::ACTION action, bool& returnVal) const {
+bool argparse::ArgumentParser::_doOptionAction(Option::ACTION action, bool& returnVal) const {
     HELP_VERSION_BEHAVIOR behavior;
     if(action == Option::HELP) {
         printHelp();
@@ -526,14 +526,14 @@ bool params::Params::_doOptionAction(Option::ACTION action, bool& returnVal) con
     }
 }
 
-void params::Params::splitOption(std::string s, std::string& flag, std::string& value) {
+void argparse::ArgumentParser::splitOption(std::string s, std::string& flag, std::string& value) {
     bool isLongOption = s.substr(0, std::min(size_t(2), s.size())) == "--";
 
     if(isLongOption) _splitLongOption(s, flag, value);
     else _splitShortOption(s, flag, value);
 }
 
-bool params::Params::_splitLongOption(std::string s, std::string& flag, std::string& value)
+bool argparse::ArgumentParser::_splitLongOption(std::string s, std::string& flag, std::string& value)
 {
     flag.clear();
     value.clear();
@@ -547,7 +547,7 @@ bool params::Params::_splitLongOption(std::string s, std::string& flag, std::str
     return true;
 }
 
-bool params::Params::_splitShortOption(std::string& s, std::string& flag, std::string& value)
+bool argparse::ArgumentParser::_splitShortOption(std::string& s, std::string& flag, std::string& value)
 {
     flag.clear();
     value.clear();
@@ -565,10 +565,10 @@ bool params::Params::_splitShortOption(std::string& s, std::string& flag, std::s
     return true;
 }
 
-bool params::Params::_parseShortOption(int& i, int argc, char** argv, std::string option)
+bool argparse::ArgumentParser::_parseShortOption(int& i, int argc, char** argv, std::string option)
 {
     std::string flag, value;
-    while(Params::_splitShortOption(option, flag, value))
+    while(ArgumentParser::_splitShortOption(option, flag, value))
     {
         // avoid std::out_of_range when looking up option key.
         if(_optionKeys.find(flag) == _optionKeys.end()) {
@@ -616,8 +616,8 @@ bool params::Params::_parseShortOption(int& i, int argc, char** argv, std::strin
     return true;
 }
 
-// std::string params::Option::validLongOptionPattern = "([a-zA-Z0-9][a-zA-Z0-9_\\-\\.:]*)(=(.+))?";
-bool params::Params::_parseLongOption(int& i, int argc, char** argv, std::string option)
+// std::string argparse::Option::validLongOptionPattern = "([a-zA-Z0-9][a-zA-Z0-9_\\-\\.:]*)(=(.+))?";
+bool argparse::ArgumentParser::_parseLongOption(int& i, int argc, char** argv, std::string option)
 {
     std::string flag, value;
     if(!_splitLongOption(option, flag, value)) {
@@ -669,7 +669,7 @@ bool params::Params::_parseLongOption(int& i, int argc, char** argv, std::string
     return true;
 }
 
-bool params::Params::parseArgs(int argc, char** argv)
+bool argparse::ArgumentParser::parseArgs(int argc, char** argv)
 {
     clearArgs();
     _validatePositionalArgs();
@@ -710,7 +710,7 @@ bool params::Params::parseArgs(int argc, char** argv)
  * @throws std::runtime_error If the PositionalArgument can have more than 1 value.
  * @throws std::out_of_range If no value was given for PositionalArgument on the command line.
  */
-std::string params::PositionalArgument::getValue() const {
+std::string argparse::PositionalArgument::getValue() const {
     if (_minValues > 1 || _maxValues > 1)
         throw std::runtime_error("Calls to this function are invalid when there are more than 1 values for argument!");
     if (getArgCount() != 1)
@@ -719,27 +719,27 @@ std::string params::PositionalArgument::getValue() const {
 }
 
 //! Number of args given for \p argName on the command line.
-size_t params::Params::nArgs(std::string argName) const {
+size_t argparse::ArgumentParser::nArgs(std::string argName) const {
     return _args.at(argName).getArgCount();
 }
 
-std::string params::Params::getOptionValue(std::string option) const {
+std::string argparse::ArgumentParser::getOptionValue(std::string option) const {
     return _options.at(_optionKeys.at(option)).getValue();
 }
 
 //! Return options to their default state, and clear positional arguments
-void params::Params::clearArgs() {
+void argparse::ArgumentParser::clearArgs() {
     for (auto it = _options.begin(); it != _options.end(); ++it)
         it->second.unsetValue();
     for (auto it = _args.begin(); it != _args.end(); ++it)
         it->second.unsetValues();
 }
 
-bool params::newWord(char c) {
+bool argparse::newWord(char c) {
     return c == ' ';
 }
 
-std::string params::multiLineString(std::string addStr, size_t margin,
+std::string argparse::multiLineString(std::string addStr, size_t margin,
                                     size_t maxLineLen, size_t indentLen,
                                     bool indentFirstLine)
 {
