@@ -6,14 +6,11 @@
 #define SUMMARIZE_TSVFILE_HPP
 
 #include <iostream>
-#include <sstream>
 #include <vector>
 #include <map>
 
 namespace summarize {
 
-    std::istream& safeGetLine(std::istream& is, std::string& s);
-    void split(const std::string& s, char delim, std::vector<std::string>& elems);
     size_t maxLength(std::vector<std::string>);
     template <typename T> size_t numDigits(T unsignedInteger) {
         int digits = 0;
@@ -23,6 +20,27 @@ namespace summarize {
         } while (unsignedInteger);
         return digits;
     }
+
+    //! Streaming RFC 4180 CSV/TSV record parser.
+    //!
+    //! Handles quoted fields, doubled "" quotes inside quoted fields, embedded
+    //! newlines inside quoted fields (a single record may span multiple physical
+    //! lines), and \n, \r and \r\n line endings. Embedded line endings inside a
+    //! quoted field are normalized to \n.
+    class CsvParser {
+    private:
+        std::streambuf* _sb;
+        char _delim;
+
+        int _get() { return _sb->sbumpc(); }
+        int _peek() { return _sb->sgetc(); }
+    public:
+        CsvParser(std::istream& is, char delim) : _sb(is.rdbuf()), _delim(delim) {}
+
+        //! Read the next record into \p fields (cleared first).
+        //! \return true if a record was read, false at end of input.
+        bool nextRecord(std::vector<std::string>& fields);
+    };
 
     class TsvFile {
     public:

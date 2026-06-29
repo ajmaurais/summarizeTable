@@ -2,15 +2,20 @@
 // Created by Aaron Maurais on 9/24/22.
 //
 
+#include <cstdio>
+
 #include <tsvFile.hpp>
 
 bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, bool hasHeader) {
-    std::string line;
     std::vector<std::vector<std::string> > data;
     size_t largestRow = 0;
+    CsvParser parser(is, _delim);
     for(size_t i = 0;; i++) {
         if(!allLines && i >= nLines) break;
-        if (!safeGetLine(is, line)) {
+        // Fill the record in place to avoid copying it out of the parser.
+        data.emplace_back();
+        if (!parser.nextRecord(data.back())) {
+            data.pop_back();
             if(i == 0) {
                 std::cerr << "ERROR: no data in input!" << std::endl;
                 return false;
@@ -21,9 +26,7 @@ bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, b
             break;
         }
 
-        data.emplace_back();
         _nRows++;
-        split(line, _delim, data.back());
         largestRow = std::max(largestRow, data.back().size());
     }
 
@@ -92,49 +95,60 @@ size_t summarize::maxLength(std::vector<std::string> strings) {
 }
 
 /**
- \brief Get next line from \p is and store it in \p t.
+ \brief Read the next record from the stream into \p fields.
 
- std::getline only handles \\n. safeGetLine handles \\n \\r \\r\\n.
- \param is stream to read from
- \param s string to store next line in \p t is cleared prior to adding new string.
- \return ref to \p is after reading next line.
+ Implements an RFC 4180 style parser. Fields may be quoted with double quotes,
+ in which case the delimiter, embedded \n, \r or \r\n line endings, and doubled
+ "" quotes are treated as literal field content. Unquoted \n, \r and \r\n end
+ the record. \p fields is cleared before reading.
+
+ \param fields vector to populate with the fields of the next record.
+ \return true if a record was read, false at end of input.
  */
-std::istream& summarize::safeGetLine(std::istream& is, std::string& s)
-{
-    s.clear();
-    std::istream::sentry se(is, true);
-    std::streambuf* sb = is.rdbuf();
+bool summarize::CsvParser::nextRecord(std::vector<std::string>& fields) {
+    fields.clear();
+    std::string field;
+    bool recordHasContent = false;
+    enum State { START_FIELD, UNQUOTED, QUOTED, QUOTE_IN_QUOTED } state = START_FIELD;
 
-    while(true){
-        int c = sb->sbumpc();
-        switch (c) {
-            case '\n':
-                return is;
-            case '\r':
-                if(sb->sgetc() == '\n')
-                    sb->sbumpc();
-                return is;
-            case -1:
-                // Also handle the case when the last line has no line ending
-                if(s.empty())
-                    is.setstate(std::ios::eofbit);
-                return is;
-            default:
-                s += (char)c;
+    while(true) {
+        int ci = _get();
+        if(ci == EOF) {
+            // A field is in progress (or pending after a trailing delimiter) iff
+            // we are past START_FIELD or the record already has content.
+            if(state != START_FIELD || recordHasContent)
+                fields.push_back(field);
+            return recordHasContent;
         }
-    }
-}
+        char c = static_cast<char>(ci);
 
-//!split \p str by \p delim and populate each split into \p elems
-void summarize::split (const std::string& str, const char delim, std::vector<std::string>& elems)
-{
-    elems.clear();
-    elems.shrink_to_fit();
-    std::stringstream ss (str);
-    std::string item;
+        // Inside a quoted field everything is literal except a double quote.
+        if(state == QUOTED) {
+            if(c == '"') state = QUOTE_IN_QUOTED;
+            else if(c == '\r') {
+                field += '\n';
+                if(_peek() == '\n') _get();
+            }
+            else field += c;
+            continue;
+        }
 
-    while(getline(ss, item, delim)) {
-        elems.push_back(item);
+        // Just saw a '"' while inside a quoted field.
+        if(state == QUOTE_IN_QUOTED) {
+            if(c == '"') { field += '"'; state = QUOTED; }       // doubled "" -> literal "
+            else if(c == _delim) { fields.push_back(field); field.clear(); state = START_FIELD; }
+            else if(c == '\n') { fields.push_back(field); return true; }
+            else if(c == '\r') { if(_peek() == '\n') _get(); fields.push_back(field); return true; }
+            else { field += c; state = UNQUOTED; }              // lenient: text after closing quote
+            continue;
+        }
+
+        // Unquoted context: START_FIELD or UNQUOTED.
+        if(c == '"' && state == START_FIELD) { recordHasContent = true; state = QUOTED; }
+        else if(c == _delim) { recordHasContent = true; fields.push_back(field); field.clear(); state = START_FIELD; }
+        else if(c == '\n') { if(recordHasContent) fields.push_back(field); return true; }
+        else if(c == '\r') { if(_peek() == '\n') _get(); if(recordHasContent) fields.push_back(field); return true; }
+        else { recordHasContent = true; field += c; state = UNQUOTED; }
     }
 }
 
