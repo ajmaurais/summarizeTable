@@ -84,15 +84,21 @@ bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, b
     PrefixStreamBuf inBuf(std::move(sample), is.rdbuf());
     std::istream in(&inBuf);
 
-    std::vector<std::vector<std::string> > data;
+    // Retain only the header (if any) plus the first _previewRows data rows. Every other
+    // record is parsed into a reused scratch buffer purely to count it and measure the
+    // widest record, so memory stays O(_previewRows * columns) regardless of file size.
+    const size_t retainRecords = (hasHeader ? 1 : 0) + _previewRows;
+    std::vector<std::vector<std::string> > retained;
+    std::vector<std::string> scratch;
     size_t largestRow = 0;
     CsvParser parser(in, _delim);
     for(size_t i = 0;; i++) {
         if(!allLines && i >= nLines) break;
-        // Fill the record in place to avoid copying it out of the parser.
-        data.emplace_back();
-        if (!parser.nextRecord(data.back())) {
-            data.pop_back();
+        bool keep = retained.size() < retainRecords;
+        if(keep) retained.emplace_back();
+        std::vector<std::string>& record = keep ? retained.back() : scratch;
+        if (!parser.nextRecord(record)) {
+            if(keep) retained.pop_back();
             if(i == 0) {
                 std::cerr << "ERROR: no data in input!" << std::endl;
                 return false;
@@ -104,14 +110,14 @@ bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, b
         }
 
         _nRows++;
-        largestRow = std::max(largestRow, data.back().size());
+        largestRow = std::max(largestRow, record.size());
     }
 
     if(hasHeader) {
         _nRows--;
         for(size_t i = 0; i < largestRow; i++) {
-            if(data[0].size() > i)
-                _headers.push_back(data[0].at(i));
+            if(retained[0].size() > i)
+                _headers.push_back(retained[0].at(i));
             else _headers.push_back("NO_NAME_COLUMN_" + std::to_string(i));
         }
     } else {
@@ -124,12 +130,12 @@ bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, b
         _headerMap[_headers[i]] = i;
     }
 
-    // populate _data by transposing data
+    // populate _data by transposing the retained data rows
     for (size_t col = 0; col < largestRow; col++) {
         _data.emplace_back();
-        for(size_t row = hasHeader; row < data.size(); row++) {
-            if (data[row].size() > col)
-                _data[col].push_back(data[row][col]);
+        for(size_t row = (hasHeader ? 1 : 0); row < retained.size(); row++) {
+            if (retained[row].size() > col)
+                _data[col].push_back(retained[row][col]);
             else _data[col].emplace_back();
         }
     }
@@ -158,7 +164,8 @@ void summarize::TsvFile::printStructure(size_t nRows) const {
         std::cout << std::string(indent, ' ') << std::to_string(i + 1) << ") " << _headers[i]
                   << std::string(maxRowLen - _headers.at(i).size(), ' ') + ':';
         // TODO: add data type here!
-        size_t printRows = std::min(nRows, _nRows);
+        // _nRows is the full row count; only getNPreviewRows() rows are retained in _data.
+        size_t printRows = std::min(nRows, getNPreviewRows());
         for (size_t row = 0; row < printRows; row++)
             std::cout << ' ' << _data.at(i).at(row);
         std::cout << " ...\n";

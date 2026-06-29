@@ -31,6 +31,10 @@ int main(int argc, char** argv)
         char fallback = fileGiven ? summarize::delimFromExtension(args.getArgumentValue("file")) : '\t';
         tsvFile.sniffDelim(fallback);
     }
+    // Only the rows that will be printed need to be held in memory; the rest of the
+    // file is streamed through just to count it.
+    int previewRows = args.getOptionValue<int>("rows");
+    tsvFile.setPreviewRows(previewRows < 0 ? 0 : static_cast<size_t>(previewRows));
     bool hasHeader = !args.getOptionValue<bool>("noHeader");
     if(args.getArgument("file").getArgCount() == 0) {
         if(!tsvFile.read(std::cin, hasHeader)) {

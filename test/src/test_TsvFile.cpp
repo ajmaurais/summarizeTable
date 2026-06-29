@@ -154,4 +154,47 @@ START_TEST("tsvFile.hpp")
             EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(1))
         }
     END_SECTION
+
+    START_SECTION("TsvFile streaming row count")
+        {   // every row is counted but only _previewRows are retained in memory
+            std::string text = "h1\th2\n";
+            for(int i = 0; i < 100; i++) text += "a\tb\n";
+            std::istringstream ss(text);
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.setPreviewRows(3);
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(100))         // full count
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(2))
+            EXPECT_EQUAL(f.getNPreviewRows(), static_cast<size_t>(3))    // only 3 retained
+        }
+        {   // fewer data rows than the preview limit
+            std::istringstream ss("h1\th2\nx\ty\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.setPreviewRows(5);
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(1))
+            EXPECT_EQUAL(f.getNPreviewRows(), static_cast<size_t>(1))
+        }
+        {   // a wide row beyond the retained set still sets the column count
+            std::istringstream ss("h1\th2\nx\ty\np\tq\tr\ts\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.setPreviewRows(1);
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(2))
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(4))           // widest row wins
+            EXPECT_EQUAL(f.getNPreviewRows(), static_cast<size_t>(1))
+        }
+        {   // a capped read (-n) still limits the row count as before
+            std::string text = "h1\th2\n";
+            for(int i = 0; i < 100; i++) text += "a\tb\n";
+            std::istringstream ss(text);
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.read(ss, static_cast<size_t>(10), true);                  // read 10 records incl. header
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(9))
+        }
+    END_SECTION
 END_TEST

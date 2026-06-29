@@ -68,8 +68,10 @@ namespace summarize {
         std::map<std::string, size_t> _headerMap;
         std::vector<std::vector<std::string> > _data;
         std::vector<TYPE> _dataTypes;
-        //! Actual number of rows in _data
+        //! Total number of data rows seen in the input (not the number retained in _data).
         size_t _nRows;
+        //! Number of leading data rows to retain for the preview; the rest are only counted.
+        size_t _previewRows;
         char _delim;
         //! When true, _read infers the delimiter from the content (using _delim as a fallback).
         bool _sniff;
@@ -84,6 +86,12 @@ namespace summarize {
             _delim = delim;
             _sniff = false;
             _nRows = 0;
+            _previewRows = 1;
+        }
+
+        //! Set the number of leading data rows to retain in memory for the preview.
+        void setPreviewRows(size_t n) {
+            _previewRows = n;
         }
 
         //! Set an explicit delimiter; disables content sniffing.
@@ -109,6 +117,10 @@ namespace summarize {
         }
         size_t getNCols() const {
             return _headers.size();
+        }
+        //! Number of data rows actually retained in memory for the preview.
+        size_t getNPreviewRows() const {
+            return _data.empty() ? 0 : _data.front().size();
         }
     };
 }
