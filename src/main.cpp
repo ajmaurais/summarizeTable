@@ -21,7 +21,16 @@ int main(int argc, char** argv)
 
     // read data
     summarize::TsvFile tsvFile;
-    tsvFile.setDelim(args.getOptionValue<char>("sep"));
+    bool fileGiven = args.getArgument("file").getArgCount() > 0;
+    if(args.optionIsSet("sep")) {
+        // Explicit separator always wins.
+        tsvFile.setDelim(args.getOptionValue<char>("sep"));
+    } else {
+        // Otherwise infer the separator from the content, falling back to the file
+        // extension (.csv -> ',') or a tab for stdin.
+        char fallback = fileGiven ? summarize::delimFromExtension(args.getArgumentValue("file")) : '\t';
+        tsvFile.sniffDelim(fallback);
+    }
     bool hasHeader = !args.getOptionValue<bool>("noHeader");
     if(args.getArgument("file").getArgCount() == 0) {
         if(!tsvFile.read(std::cin, hasHeader)) {

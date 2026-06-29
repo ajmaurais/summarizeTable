@@ -77,4 +77,81 @@ START_TEST("tsvFile.hpp")
         EXPECT_EQUAL(countRecords("\n", '\t'), static_cast<size_t>(1))             // single blank line
         EXPECT_EQUAL(parseAll("single\n", '\t'), std::string("single"))            // one column
     END_SECTION
+
+    START_SECTION("delimFromExtension")
+        EXPECT_EQUAL(summarize::delimFromExtension("foo.csv"), ',')
+        EXPECT_EQUAL(summarize::delimFromExtension("foo.CSV"), ',')                // case-insensitive
+        EXPECT_EQUAL(summarize::delimFromExtension("foo.tsv"), '\t')
+        EXPECT_EQUAL(summarize::delimFromExtension("foo.txt"), '\t')
+        EXPECT_EQUAL(summarize::delimFromExtension("foo"), '\t')                   // no extension
+        EXPECT_EQUAL(summarize::delimFromExtension("path/to/file.csv"), ',')
+        EXPECT_EQUAL(summarize::delimFromExtension("my.dir/file"), '\t')           // dot is in a dir, not the file
+    END_SECTION
+
+    START_SECTION("stripUtf8Bom")
+        std::string withBom = "\xEF\xBB\xBF" "hello";
+        EXPECT_EQUAL(summarize::stripUtf8Bom(withBom), true)
+        EXPECT_EQUAL(withBom, std::string("hello"))
+        std::string noBom = "hello";
+        EXPECT_EQUAL(summarize::stripUtf8Bom(noBom), false)
+        EXPECT_EQUAL(noBom, std::string("hello"))
+    END_SECTION
+
+    START_SECTION("detectSepDirective")
+        char d = '\0';
+        size_t strip = 0;
+        EXPECT_EQUAL(summarize::detectSepDirective("sep=,\nx,y\n", d, strip), true)
+        EXPECT_EQUAL(d, ',')
+        EXPECT_EQUAL(strip, static_cast<size_t>(6))                                // "sep=," + '\n'
+        EXPECT_EQUAL(summarize::detectSepDirective("sep=;\r\nx;y\n", d, strip), true)
+        EXPECT_EQUAL(d, ';')
+        EXPECT_EQUAL(strip, static_cast<size_t>(7))                                // "sep=;" + '\r\n'
+        EXPECT_EQUAL(summarize::detectSepDirective("\"sep=,\"\nx\n", d, strip), true)  // quoted form
+        EXPECT_EQUAL(d, ',')
+        EXPECT_EQUAL(summarize::detectSepDirective("name,age\n", d, strip), false) // ordinary header
+        EXPECT_EQUAL(summarize::detectSepDirective("sep=,extra\n", d, strip), false) // not a lone directive
+    END_SECTION
+
+    START_SECTION("sniffDelimiter")
+        EXPECT_EQUAL(summarize::sniffDelimiter("a\tb\tc\n1\t2\t3\n", true, '\t'), '\t')
+        EXPECT_EQUAL(summarize::sniffDelimiter("a,b,c\n1,2,3\n", true, '\t'), ',')
+        EXPECT_EQUAL(summarize::sniffDelimiter("a;b;c\n1;2;3\n", true, '\t'), ';')
+        EXPECT_EQUAL(summarize::sniffDelimiter("a|b|c\n1|2|3\n", true, '\t'), '|')
+        // A tab-delimited table whose last column always contains one comma -> tab wins.
+        EXPECT_EQUAL(summarize::sniffDelimiter("name\tnote\nAlice\thi, there\nBob\tyo, x\n", true, '\t'), '\t')
+        // Commas inside quoted fields must not be counted.
+        EXPECT_EQUAL(summarize::sniffDelimiter("\"a,b\"\tc\n\"d,e\"\tf\n", true, '\t'), '\t')
+        // No delimiter present -> fall back to the supplied default.
+        EXPECT_EQUAL(summarize::sniffDelimiter("alpha\nbeta\n", true, '\t'), '\t')
+        EXPECT_EQUAL(summarize::sniffDelimiter("alpha\nbeta\n", true, ','), ',')
+    END_SECTION
+
+    START_SECTION("TsvFile sniffing integration")
+        {   // .csv content is sniffed as comma even with a tab fallback
+            std::istringstream ss("a,b,c\n1,2,3\n");
+            summarize::TsvFile f;
+            f.sniffDelim('\t');
+            EXPECT_EQUAL(f.read(ss, true), true)
+            EXPECT_EQUAL(f.getDelim(), ',')
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(3))
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(1))
+        }
+        {   // "sep=" directive sets the delimiter and is not counted as a data row
+            std::istringstream ss("sep=;\nx;y\n1;2\n");
+            summarize::TsvFile f;
+            f.sniffDelim('\t');
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getDelim(), ';')
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(2))
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(1))
+        }
+        {   // explicit setDelim overrides content sniffing
+            std::istringstream ss("a,b,c\n1,2,3\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getDelim(), '\t')
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(1))
+        }
+    END_SECTION
 END_TEST
