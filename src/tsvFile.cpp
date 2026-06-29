@@ -194,6 +194,17 @@ char summarize::delimFromExtension(const std::string& path) {
     return '\t';
 }
 
+bool summarize::hasParquetExtension(const std::string& path) {
+    size_t slash = path.find_last_of("/\\");
+    size_t dot = path.find_last_of('.');
+    if(dot == std::string::npos || (slash != std::string::npos && dot < slash))
+        return false;
+    std::string ext = path.substr(dot + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+    return ext == "parquet" || ext == "pq";
+}
+
 bool summarize::stripUtf8Bom(std::string& s) {
     if(s.size() >= 3 &&
        static_cast<unsigned char>(s[0]) == 0xEF &&

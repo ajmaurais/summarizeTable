@@ -15,6 +15,8 @@ namespace summarize {
 
     //! Default delimiter inferred from a file extension: ',' for .csv, '\t' otherwise.
     char delimFromExtension(const std::string& path);
+    //! True if \p path has a .parquet or .pq extension.
+    bool hasParquetExtension(const std::string& path);
     //! Remove a leading UTF-8 byte order mark from \p s. \return true if one was removed.
     bool stripUtf8Bom(std::string& s);
     //! Detect an Excel "sep=<char>" directive at the start of \p sample (optionally
@@ -109,6 +111,10 @@ namespace summarize {
         }
         bool read(std::istream&, size_t, bool = true);
         bool read(std::istream&, bool = true);
+        //! Read column names, row count and a preview of the first getNPreviewRows()
+        //! rows from the parquet file at \p path. Defined in parquetFile.cpp and only
+        //! linked when the project is built with ENABLE_PARQUET.
+        bool readParquet(const std::string& path);
 
         void printSummary() const;
         void printStructure(size_t nRows = 1) const;

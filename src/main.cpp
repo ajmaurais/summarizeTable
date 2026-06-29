@@ -22,32 +22,49 @@ int main(int argc, char** argv)
     // read data
     summarize::TsvFile tsvFile;
     bool fileGiven = args.getArgument("file").getArgCount() > 0;
-    if(args.optionIsSet("sep")) {
-        // Explicit separator always wins.
-        tsvFile.setDelim(args.getOptionValue<char>("sep"));
-    } else {
-        // Otherwise infer the separator from the content, falling back to the file
-        // extension (.csv -> ',') or a tab for stdin.
-        char fallback = fileGiven ? summarize::delimFromExtension(args.getArgumentValue("file")) : '\t';
-        tsvFile.sniffDelim(fallback);
-    }
+    std::string filePath = fileGiven ? args.getArgumentValue("file") : "";
+
     // Only the rows that will be printed need to be held in memory; the rest of the
     // file is streamed through just to count it.
     int previewRows = args.getOptionValue<int>("rows");
     tsvFile.setPreviewRows(previewRows < 0 ? 0 : static_cast<size_t>(previewRows));
-    bool hasHeader = !args.getOptionValue<bool>("noHeader");
-    if(args.getArgument("file").getArgCount() == 0) {
-        if(!tsvFile.read(std::cin, hasHeader)) {
-            std::cerr << "Could not read table from stdin!\n";
+
+    if(fileGiven && summarize::hasParquetExtension(filePath)) {
+        // Parquet is columnar and self-describing, so the delimiter / header options
+        // do not apply; read it directly through Arrow.
+#ifdef ENABLE_PARQUET
+        if(!tsvFile.readParquet(filePath)) {
+            std::cerr << "Could not read parquet file!\n";
             return 1;
         }
+#else
+        std::cerr << "Parquet support was not enabled in this build.\n";
+        return 1;
+#endif
     } else {
-        std::ifstream inF(args.getArgumentValue("file"));
-        bool success = args.optionIsSet("n") ? tsvFile.read(inF, args.getOptionValue<int>("n"), hasHeader)
-                                             : tsvFile.read(inF, hasHeader);
-        if(!success) {
-            std::cerr << "Could not read table from file!\n";
-            return 1;
+        if(args.optionIsSet("sep")) {
+            // Explicit separator always wins.
+            tsvFile.setDelim(args.getOptionValue<char>("sep"));
+        } else {
+            // Otherwise infer the separator from the content, falling back to the file
+            // extension (.csv -> ',') or a tab for stdin.
+            char fallback = fileGiven ? summarize::delimFromExtension(filePath) : '\t';
+            tsvFile.sniffDelim(fallback);
+        }
+        bool hasHeader = !args.getOptionValue<bool>("noHeader");
+        if(!fileGiven) {
+            if(!tsvFile.read(std::cin, hasHeader)) {
+                std::cerr << "Could not read table from stdin!\n";
+                return 1;
+            }
+        } else {
+            std::ifstream inF(filePath);
+            bool success = args.optionIsSet("n") ? tsvFile.read(inF, args.getOptionValue<int>("n"), hasHeader)
+                                                 : tsvFile.read(inF, hasHeader);
+            if(!success) {
+                std::cerr << "Could not read table from file!\n";
+                return 1;
+            }
         }
     }
 
@@ -55,7 +72,7 @@ int main(int argc, char** argv)
     if(args.getOptionValue("mode") == "summary") {
         tsvFile.printSummary();
     } else {
-        std::cout << (args.getArgument("file").getArgCount() == 0 ? "stdin" : args.getArgumentValue("file")) << ": ";
+        std::cout << (fileGiven ? filePath : "stdin") << ": ";
         tsvFile.printStructure(args.getOptionValue<int>("rows"));
     }
 
