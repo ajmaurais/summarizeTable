@@ -97,7 +97,11 @@ bool summarize::TsvFile::_read(std::istream& is, size_t nLines, bool allLines, b
         bool keep = retained.size() < retainRecords;
         if(keep) retained.emplace_back();
         std::vector<std::string>& record = keep ? retained.back() : scratch;
-        if (!parser.nextRecord(record)) {
+        // Skip blank lines (records with no fields) anywhere in the input, matching the
+        // behaviour of R's blank.lines.skip and pandas' skip_blank_lines.
+        bool got;
+        while((got = parser.nextRecord(record)) && record.empty()) {}
+        if (!got) {
             if(keep) retained.pop_back();
             if(i == 0) {
                 std::cerr << "ERROR: no data in input!" << std::endl;

@@ -197,4 +197,37 @@ START_TEST("tsvFile.hpp")
             EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(9))
         }
     END_SECTION
+
+    START_SECTION("TsvFile skips blank lines")
+        {   // a trailing blank line is not an observation
+            std::istringstream ss("h1\th2\nx\ty\n\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(1))
+        }
+        {   // a blank line in the middle is skipped
+            std::istringstream ss("h1\th2\n\nx\ty\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(1))
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(2))
+        }
+        {   // a leading blank line does not become the header
+            std::istringstream ss("\nh1\th2\nx\ty\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNCols(), static_cast<size_t>(2))
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(1))
+        }
+        {   // a row of empty fields ("\t") is data, not a blank line
+            std::istringstream ss("h1\th2\n\t\nx\ty\n");
+            summarize::TsvFile f;
+            f.setDelim('\t');
+            f.read(ss, true);
+            EXPECT_EQUAL(f.getNRows(), static_cast<size_t>(2))
+        }
+    END_SECTION
 END_TEST
