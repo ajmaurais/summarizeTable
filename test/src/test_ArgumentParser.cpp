@@ -11,9 +11,10 @@ int const TEST_ARGV_SIZE = 256;
 
 int populateArgArray(const std::vector<std::string>& argVector, char* argArray[TEST_ARGV_SIZE]) {
     for(size_t i = 0; i < argVector.size(); i++) {
-        argArray[i] = new char[argVector[i].size()];
+        argArray[i] = new char[argVector[i].size() + 1];   // +1 for the '\0' strcpy writes
         strcpy(argArray[i], argVector[i].c_str());
     }
+    argArray[argVector.size()] = nullptr;                  // argv[argc] is NULL, as guaranteed in main()
     return argVector.size();
 }
 
@@ -372,6 +373,96 @@ START_TEST("ArgumentParser")
         EXPECT_EQUAL(programArgs.parseArgs(argCount, argArray), false)
 
     delete[] argArray;
+    END_SECTION
+
+    // Item 1: an option that requires a value, given as the final token, used to read
+    // argv[argc] (NULL) and construct a std::string from it -> undefined behaviour.
+    START_SECTION("Regression: value-requiring option as the last argument errors cleanly")
+        {
+            argparse::ArgumentParser args("test");
+            args.addOption<int>('n', "num", "A number.");
+            char** a = new char*[TEST_ARGV_SIZE];
+            std::vector<std::string> v = {std::string(argv[0]), "--num"};   // long, no value, last
+            int c = populateArgArray(v, a);
+            EXPECT_EQUAL(args.parseArgs(c, a), false)
+            v = {std::string(argv[0]), "-n"};                               // short, no value, last
+            c = populateArgArray(v, a);
+            EXPECT_EQUAL(args.parseArgs(c, a), false)
+            delete[] a;
+        }
+    END_SECTION
+
+    // Item 2: switches that returned from every case but had no fallback would run off
+    // the end of a non-void function for an out-of-range enum value.
+    START_SECTION("Regression: enum switches cover every value and reject out-of-range")
+        {
+            EXPECT_EQUAL(argparse::Argument::typeToStr(argparse::Argument::STRING), "std::string")
+            EXPECT_EQUAL(argparse::Argument::typeToStr(argparse::Argument::CHAR), "char")
+            EXPECT_EQUAL(argparse::Argument::typeToStr(argparse::Argument::BOOL), "bool")
+            EXPECT_EQUAL(argparse::Argument::typeToStr(argparse::Argument::INT), "int")
+            EXPECT_EQUAL(argparse::Argument::typeToStr(argparse::Argument::FLOAT), "float")
+            EXPECT_EQUAL(argparse::Argument::isNumeric(argparse::Argument::INT), true)
+            EXPECT_EQUAL(argparse::Argument::isNumeric(argparse::Argument::STRING), false)
+            // 7 is representable by the enum's underlying type but names no enumerator.
+            EXPECT_EXCEPTION(std::runtime_error,
+                             argparse::Argument::typeToStr(static_cast<argparse::Argument::TYPE>(7)))
+            EXPECT_EXCEPTION(std::runtime_error,
+                             argparse::Argument::isNumeric(static_cast<argparse::Argument::TYPE>(7)))
+        }
+    END_SECTION
+
+    // Item 3: _doOptionAction's behavior variable was uninitialized; verify every
+    // configurable help behavior dispatches correctly.
+    START_SECTION("Regression: help action dispatch is well-defined for all behaviors")
+        {
+            argparse::ArgumentParser args("test");
+            char** a = new char*[TEST_ARGV_SIZE];
+            std::vector<std::string> v = {std::string(argv[0]), "-h"};
+            int c = populateArgArray(v, a);
+            args.setHelpBehavior(argparse::ArgumentParser::CONTINUE);
+            EXPECT_EQUAL(args.parseArgs(c, a), true)
+            args.setHelpBehavior(argparse::ArgumentParser::RETURN_TRUE);
+            c = populateArgArray(v, a);
+            EXPECT_EQUAL(args.parseArgs(c, a), true)
+            args.setHelpBehavior(argparse::ArgumentParser::RETURN_FALSE);
+            c = populateArgArray(v, a);
+            EXPECT_EQUAL(args.parseArgs(c, a), false)
+            delete[] a;
+        }
+    END_SECTION
+
+    // Item 4: signature() computed padding with unsigned subtraction; verify it wraps
+    // only when the flag is too wide for the help column and never otherwise.
+    START_SECTION("Regression: help signature wraps only when the flag is too wide")
+        {
+            argparse::Option::indendentLen = 22;
+            argparse::Option::maxLineLen = 80;
+            argparse::Option shortFlag = argparse::Option().create<bool>(
+                'h', "help", "Help.", false, argparse::Option::ACTION::HELP);
+            EXPECT_EQUAL(shortFlag.signature(2).find('\n') == std::string::npos, true)   // one line
+            argparse::Option longFlag = argparse::Option().create<int>(
+                "aFlagNameWiderThanTheIndent", "Help.");
+            EXPECT_EQUAL(longFlag.signature(2).find('\n') != std::string::npos, true)     // wrapped
+        }
+    END_SECTION
+
+    // Item 5: a number that matched the validation regex but overflowed the target type
+    // used to throw std::out_of_range out of setValue/parseArgs instead of being rejected.
+    START_SECTION("Regression: out-of-range numbers are rejected, not thrown on")
+        {
+            argparse::Option intOpt = argparse::Option().create<int>('n', "num", "A number.");
+            EXPECT_EQUAL(intOpt.isValid("2147483647"), true)               // INT_MAX, fits
+            EXPECT_EQUAL(intOpt.isValid("99999999999999999999"), false)    // overflows int
+            EXPECT_EQUAL(intOpt.setValue("99999999999999999999"), false)   // rejected, no throw
+
+            argparse::ArgumentParser args("test");
+            args.addOption<int>('n', "num", "A number.");
+            char** a = new char*[TEST_ARGV_SIZE];
+            std::vector<std::string> v = {std::string(argv[0]), "-n", "99999999999999999999"};
+            int c = populateArgArray(v, a);
+            EXPECT_EQUAL(args.parseArgs(c, a), false)
+            delete[] a;
+        }
     END_SECTION
 
 END_TEST

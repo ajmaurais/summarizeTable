@@ -108,6 +108,9 @@ std::string argparse::Argument::typeToStr(argparse::Argument::TYPE type) {
         case INT: return "int";
         case FLOAT: return "float";
     }
+    // Every enumerator is handled above; this guards against an out-of-range value
+    // and stops the compiler warning about control reaching the end of a non-void function.
+    throw std::runtime_error("Unknown Argument::TYPE!");
 }
 
 bool argparse::Argument::isNumeric(argparse::Argument::TYPE type) {
@@ -120,6 +123,7 @@ bool argparse::Argument::isNumeric(argparse::Argument::TYPE type) {
         case FLOAT:
             return true;
     }
+    throw std::runtime_error("Unknown Argument::TYPE!");
 }
 
 void argparse::Option::_checkOptFlags() const {
@@ -169,11 +173,25 @@ bool argparse::ArgumentValue::isValid(argparse::ArgumentValue::VALUE_TYPE type, 
         case VALUE_TYPE::INT:
         case VALUE_TYPE::LONG:
         case VALUE_TYPE::SIZE_T:
-            return std::regex_match(value, std::regex("^-?[0-9]+$"));
+            if(!std::regex_match(value, std::regex("^-?[0-9]+$"))) return false;
+            // The format is right, but std::sto* throws std::out_of_range if the value
+            // does not fit the target type, so confirm it actually converts.
+            try {
+                if(type == VALUE_TYPE::INT) std::stoi(value);
+                else if(type == VALUE_TYPE::LONG) std::stol(value);
+                else std::stoul(value);
+            } catch(const std::out_of_range&) { return false; }
+            return true;
         case VALUE_TYPE::FLOAT:
         case VALUE_TYPE::DOUBLE:
-            return std::regex_match(value, std::regex("^-?[0-9]+(\\.[0-9]*)?$"));
+            if(!std::regex_match(value, std::regex("^-?[0-9]+(\\.[0-9]*)?$"))) return false;
+            try {
+                if(type == VALUE_TYPE::FLOAT) std::stof(value);
+                else std::stod(value);
+            } catch(const std::out_of_range&) { return false; }
+            return true;
     }
+    throw std::runtime_error("Unknown VALUE_TYPE!");
 }
 
 bool argparse::ArgumentValue::isValid(const std::string& s) const{
@@ -188,6 +206,7 @@ bool argparse::Argument::isValid(std::string s) const{
        case TYPE::INT: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::INT, s);
        case TYPE::FLOAT: return ArgumentValue::isValid(ArgumentValue::VALUE_TYPE::FLOAT, s);
    }
+   throw std::runtime_error("Unknown Argument::TYPE!");
 }
 
 //! Return true if after option is set, option is valid.
@@ -306,12 +325,14 @@ std::string argparse::Option::help() const {
 }
 
 std::string argparse::Argument::signature(std::string ret, int margin) const {
-    size_t spacesBeforeHelp = indendentLen > ret.size() ? indendentLen + margin - ret.size() : 0;
-    if(spacesBeforeHelp <= 0) {
+    // indendentLen and ret.size() are size_t, so compare directly rather than computing
+    // a difference that could wrap. The help text starts at column indendentLen; if the
+    // flag is at least that wide it cannot share the line, so wrap the help underneath.
+    if(ret.size() >= indendentLen) {
         ret += "\n";
         ret = std::string(margin, ' ') + ret + multiLineString(help(), margin, true);
     } else {
-        ret += std::string(spacesBeforeHelp - margin, ' ');
+        ret += std::string(indendentLen - ret.size(), ' ');   // pad out to the help column
         ret += help();
         ret = multiLineString(ret, margin);
     }
@@ -502,7 +523,9 @@ void argparse::ArgumentParser::_validatePositionalArgs() const {
 }
 
 bool argparse::ArgumentParser::_doOptionAction(Option::ACTION action, bool& returnVal) const {
-    HELP_VERSION_BEHAVIOR behavior;
+    // Initialized so the switch below never reads an indeterminate value if this is
+    // ever called with an action other than HELP or VERSION.
+    HELP_VERSION_BEHAVIOR behavior = CONTINUE;
     if(action == Option::HELP) {
         printHelp();
         behavior = _helpBehavior;
@@ -524,6 +547,7 @@ bool argparse::ArgumentParser::_doOptionAction(Option::ACTION action, bool& retu
         case EXIT_0: exit(0);
         case EXIT_1: exit(1);
     }
+    return false;
 }
 
 void argparse::ArgumentParser::splitOption(std::string s, std::string& flag, std::string& value) {
@@ -599,7 +623,9 @@ bool argparse::ArgumentParser::_parseShortOption(int& i, int argc, char** argv, 
             value = "";
         } else {
             if (value.empty()) {
-                if (i + 1 <= argc && !isFlag(std::string(argv[++i]))) {
+                // i + 1 < argc, not <=: argv[argc] is NULL, so reading it would
+                // construct std::string from a null pointer (undefined behaviour).
+                if (i + 1 < argc && !isFlag(std::string(argv[++i]))) {
                     value = unquote(std::string(argv[i]));
                 } else {
                     std::cerr << "ERROR: Missing argument for '" << option << "'\n";
@@ -654,7 +680,9 @@ bool argparse::ArgumentParser::_parseLongOption(int& i, int argc, char** argv, s
         value = "";
     } else {
         if (value.empty()) {
-            if (i + 1 <= argc && !isFlag(std::string(argv[++i]))) {
+            // i + 1 < argc, not <=: argv[argc] is NULL, so reading it would
+            // construct std::string from a null pointer (undefined behaviour).
+            if (i + 1 < argc && !isFlag(std::string(argv[++i]))) {
                 value = unquote(std::string(argv[i]));
             } else {
                 std::cerr << "ERROR: Missing argument for '" << option << "'\n";
